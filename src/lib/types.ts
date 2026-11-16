@@ -110,6 +110,8 @@ export type PublishMeta = {
   pages: PublishPage[];
   /** where to publish; omitted means the paired Digital Paper */
   target?: PublishTarget;
+  /** the pixels are R, G, B bytes per pixel instead of one gray byte (a color reader); omitted means gray */
+  color?: boolean;
 };
 export type PublishResult = { path: string; entryId: string; pages: number; bytes: number };
 

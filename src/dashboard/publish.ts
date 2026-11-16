@@ -5,12 +5,11 @@ import { adb, adbReady } from '../lib/adb';
 import { capabilitiesWith } from '../lib/readers';
 import type { AppSettings, LinkRect, PublishMeta, PublishPage, PublishResult } from '../lib/types';
 import { emptyBag, fail, ok, type DataBag, type Source, type SourceKind } from './data';
-import { ensureFonts, fontSample } from './fonts';
 import { pageSize } from './grid';
 import { pageLinks } from './links';
 import type { Dashboard } from './model';
-import { targetOf } from './publish-target';
-import { renderPage, sourceOf } from './render';
+import { colorOf, targetOf } from './publish-target';
+import { ensureDashboardFonts, renderPage, sourceOf } from './render';
 import { renderSizeFor, type Size } from './resolution';
 
 /** how long one source may take before its widget gives up (the Rust side has its own, shorter limits) */
@@ -70,6 +69,15 @@ export function lumaFromRgba(rgba: Uint8ClampedArray, out: Uint8Array, offset: n
   }
 }
 
+/** R, G, B bytes of RGBA pixels, written to `out` from `offset` (the canvas is opaque: the page is painted white first) */
+export function rgbFromRgba(rgba: Uint8ClampedArray, out: Uint8Array, offset: number): void {
+  for (let i = 0, n = rgba.length >> 2; i < n; i++) {
+    out[offset + i * 3] = rgba[i * 4];
+    out[offset + i * 3 + 1] = rgba[i * 4 + 1];
+    out[offset + i * 3 + 2] = rgba[i * 4 + 2];
+  }
+}
+
 export type Rendered = { pixels: Uint8Array; pages: PublishPage[] };
 
 /** link rectangles follow the page when it is rendered at another size than the standard one */
@@ -81,10 +89,11 @@ export function scaleLinks(links: LinkRect[], sx: number, sy: number): LinkRect[
 /**
  * Renders every page on its own canvas at `out` pixels (the standard 1650 x 2200, or 2200 x 1650, by default); devicePixelRatio
  * plays no part. A larger `out` scales the drawing itself, so everything stays sharp; memory is one page of RGBA at a time
- * plus the 8-bit result (a 2400 x 3200 page is 7.7 MB of it).
+ * plus the 8-bit result (a 2400 x 3200 page is 7.7 MB of it, or 23 MB in color).
+ * With `color` every pixel is three bytes (R, G, B) and widgets that can draw color do; otherwise one byte of gray.
  */
-export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (index: number, total: number) => void, out?: Size): Promise<Rendered> {
-  await ensureFonts(fontSample(d, data));
+export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (index: number, total: number) => void, out?: Size, color = false): Promise<Rendered> {
+  await ensureDashboardFonts(d, data);
   const page = pageSize(d.orientation);
   const { width, height } = out ?? page;
   const sx = width / page.width, sy = height / page.height;
@@ -94,15 +103,16 @@ export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (inde
   const g = canvas.getContext('2d', { willReadFrequently: true });
   if (!g) throw new Error('The canvas could not be created');
 
-  const pixels = new Uint8Array(width * height * d.pages.length);
+  const perPage = width * height * (color ? 3 : 1);
+  const pixels = new Uint8Array(perPage * d.pages.length);
   const pages: PublishPage[] = [];
   for (let i = 0; i < d.pages.length; i++) {
     onPage?.(i, d.pages.length);
     // let the progress text paint before the next (synchronous, ~100 ms) page render
     await new Promise((r) => setTimeout(r));
     g.setTransform(sx, 0, 0, sy, 0, 0);
-    renderPage(g, d.pages[i], data, { width: page.width, height: page.height, dashboard: d, pageIndex: i });
-    lumaFromRgba(g.getImageData(0, 0, width, height).data, pixels, i * width * height);
+    renderPage(g, d.pages[i], data, { width: page.width, height: page.height, dashboard: d, pageIndex: i, color });
+    (color ? rgbFromRgba : lumaFromRgba)(g.getImageData(0, 0, width, height).data, pixels, i * perPage);
     pages.push({ width, height, links: scaleLinks(pageLinks(d, i), sx, sy) });
   }
   return { pixels, pages };
@@ -118,7 +128,7 @@ export function safeDocName(name: string): string {
 export function buildMeta(d: Dashboard, pages: PublishPage[], settings: Pick<AppSettings, 'displayAfterPush'>): PublishMeta {
   const target = targetOf(d);
   // a USB reader has no "open on screen" and takes its folder from the target; the Digital Paper's meta stays as it always was
-  if (target.kind === 'mtp') return { name: safeDocName(d.name), folder: '', display: false, pages, target };
+  if (target.kind === 'mtp') return { name: safeDocName(d.name), folder: '', display: false, pages, target, ...(colorOf(d) ? { color: true } : {}) };
   return {
     name: safeDocName(d.name),
     folder: d.publish?.folder?.trim() ?? '',
@@ -156,7 +166,7 @@ async function prepare(d: Dashboard, o: PushOptions, pictures: boolean): Promise
   const t = targetOf(d);
   // only pictures for a USB reader follow its screen; a PDF is always laid out at the standard size
   const size = pictures && t.kind === 'mtp' ? renderSizeFor(d, adb[t.readerId]?.screen) : undefined;
-  const { pixels, pages } = await renderAllPages(d, data, (page, total) => o.onProgress?.({ stage: 'render', page: page + 1, pages: total }), size);
+  const { pixels, pages } = await renderAllPages(d, data, (page, total) => o.onProgress?.({ stage: 'render', page: page + 1, pages: total }), size, colorOf(d));
   return { meta: buildMeta(d, pages, o.settings), pixels };
 }
 

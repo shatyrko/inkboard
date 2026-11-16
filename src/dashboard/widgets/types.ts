@@ -8,7 +8,16 @@ import type { Page, WidgetProps, WidgetType } from '../model';
 import type { Measure } from '../text';
 
 /** what a widget may know about the page it sits on */
-export type RenderEnv = { now: Date; pages: Page[]; pageIndex: number };
+export type RenderEnv = {
+  now: Date;
+  pages: Page[];
+  pageIndex: number;
+  /** the page goes to a color reader: widgets that can draw in color may do so (everything else stays black and white) */
+  color: boolean;
+};
+
+/** a font a widget draws with, so the renderer can load it before drawing (the canvas ignores a webfont that has not loaded) */
+export type FontNeed = { family: string; weight: number; text: string };
 
 /** Drawing happens in the widget's own box: (0, 0) is its top-left corner and it is clipped to w x h. */
 export type DrawContext<P, D> = {
@@ -56,6 +65,8 @@ export type WidgetDef<T extends WidgetType, D = unknown> = {
   /** a source that must not run while the user is typing (it reaches the network or runs a command): the editor loads it on request only */
   manual?: { label: string };
   draw: (c: DrawContext<WidgetProps[T], D>) => void;
+  /** the fonts this widget draws with, beyond the interface font */
+  fonts?: (p: WidgetProps[T]) => FontNeed[];
   /** clickable regions this widget adds to its page in the PDF, in page pixels */
   links?: (c: { rect: Rect; props: WidgetProps[T]; pages: Page[]; pageIndex: number }) => LinkRect[];
 };

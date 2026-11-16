@@ -71,6 +71,19 @@ PDF that is uploaded to the reader, so anything in your chats can end up on its 
 `--only-incoming` leaves out your own messages, `--lines` sets how much text is kept per message, and `--demo` prints invented messages
 without touching the network.
 
+### Type tests
+
+Two more starting points, **Type test, gray** and **Type test, color**, put the bundled typefaces on a page in a ladder of sizes, as
+many as fit, so you can see what reads well on a screen. They use the **Type specimen** widget: pick the typefaces (19 bundled ones: serif,
+sans, monospace and dyslexia-friendly), the sizes, the sample text and the weight. Each line repeats the sample to fill the width, and
+lines can have colored ink or tinted backgrounds. Sizes are in page pixels (a reader draws about 150 of them to the inch).
+
+- The gray one is made for the Digital Paper (the same drawing works on any reader).
+- The color one is made for a color e-ink reader such as the Boox Tab X C: create it while that reader is selected and it saves
+  one picture per page at the screen's own resolution. **Color** is a switch in the dashboard's publishing settings (USB readers, pictures
+  and PDFs); the files then carry RGB pixels, three times the size of gray ones. Only the type specimen draws in color so far, and a
+  page that is not published in color always comes out in black and white.
+
 ## Things worth knowing
 
 - **PDF only.** The reader opens PDF files and nothing else. Convert EPUB, FB2 or MOBI first (for example with Calibre).
@@ -127,6 +140,10 @@ cargo run -p dpt-client --example probe -- <address>     # read-only smoke test 
 
 The reader's protocol was mapped out by [dpt-rp1-py](https://github.com/janten/dpt-rp1-py); `dpt-client` is an independent
 implementation of the same protocol.
+
+The typefaces of the type specimen come from [Fontsource](https://fontsource.org): Literata, Merriweather, Source Serif 4, Lora,
+EB Garamond, Noto Serif, Crimson Pro, PT Serif, Inter, Roboto, Open Sans, Noto Sans, Source Sans 3, IBM Plex Sans and Mono,
+Atkinson Hyperlegible Next, Lexend, JetBrains Mono and OpenDyslexic, all under the SIL Open Font License.
 
 ## License
 

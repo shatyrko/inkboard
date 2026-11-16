@@ -1,4 +1,4 @@
-//! Builds the PDF that goes to the reader: one full-page grayscale image per dashboard page, plus invisible link
+//! Builds the PDF that goes to the reader: one full-page image (grayscale, or RGB for a color reader) per dashboard page, plus invisible link
 //! annotations so a page can jump to another page. Written by hand (a few objects, a cross-reference table) so there is
 //! nothing to go wrong in a general-purpose PDF library, and the output is small and predictable.
 
@@ -49,12 +49,22 @@ fn num(v: f64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// `pixels` holds every page's 8-bit grayscale pixels back to back (row-major, no padding).
-pub fn build(title: &str, pages: &[PageSpec], pixels: &[u8]) -> Result<Vec<u8>, String> {
+/// Bytes one pixel takes: 1 for 8-bit grayscale, 3 for 8-bit RGB.
+pub fn bytes_per_pixel(color: bool) -> usize {
+    if color {
+        3
+    } else {
+        1
+    }
+}
+
+/// `pixels` holds every page's pixels back to back (row-major, no padding): 8-bit grayscale, or R, G, B bytes when `color` is set.
+pub fn build(title: &str, pages: &[PageSpec], pixels: &[u8], color: bool) -> Result<Vec<u8>, String> {
     if pages.is_empty() {
         return Err("a dashboard needs at least one page".into());
     }
-    let expected: usize = pages.iter().map(|p| p.width as usize * p.height as usize).sum();
+    let ch = bytes_per_pixel(color);
+    let expected: usize = pages.iter().map(|p| p.width as usize * p.height as usize * ch).sum();
     if expected != pixels.len() {
         return Err(format!("page sizes add up to {expected} bytes but {} arrived", pixels.len()));
     }
@@ -74,7 +84,7 @@ pub fn build(title: &str, pages: &[PageSpec], pixels: &[u8]) -> Result<Vec<u8>, 
 
     let mut offset = 0usize;
     for (i, spec) in pages.iter().enumerate() {
-        let len = spec.width as usize * spec.height as usize;
+        let len = spec.width as usize * spec.height as usize * ch;
         let (w_pt, h_pt) = (spec.width as f64 * PX_TO_PT, spec.height as f64 * PX_TO_PT);
         let content_id = next;
         let image_id = next + 1;
@@ -111,7 +121,8 @@ pub fn build(title: &str, pages: &[PageSpec], pixels: &[u8]) -> Result<Vec<u8>, 
 
         let data = deflate(&pixels[offset..offset + len]);
         offset += len;
-        let dict = format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode", spec.width, spec.height);
+        let space = if color { "DeviceRGB" } else { "DeviceGray" };
+        let dict = format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /{space} /BitsPerComponent 8 /Filter /FlateDecode", spec.width, spec.height);
         objects.push((image_id, stream(&dict, &data)));
     }
     let info_id = next;
@@ -159,7 +170,7 @@ mod tests {
     #[test]
     fn single_page_structure_and_offsets() {
         let pixels: Vec<u8> = (0..40 * 60).map(|i| (i % 256) as u8).collect();
-        let pdf = build("Test", &[spec(40, 60, vec![])], &pixels).unwrap();
+        let pdf = build("Test", &[spec(40, 60, vec![])], &pixels, false).unwrap();
         assert!(pdf.starts_with(b"%PDF-1.4"));
         assert!(pdf.ends_with(b"%%EOF\n"));
 
@@ -178,7 +189,7 @@ mod tests {
     #[test]
     fn image_stream_round_trips() {
         let pixels: Vec<u8> = (0..30 * 20).map(|i| (i * 7 % 256) as u8).collect();
-        let pdf = build("x", &[spec(30, 20, vec![])], &pixels).unwrap();
+        let pdf = build("x", &[spec(30, 20, vec![])], &pixels, false).unwrap();
         let marker = find(&pdf, b"/FlateDecode /Length ").unwrap() + 21;
         let len_end = pdf[marker..].iter().position(|b| *b == b' ').unwrap();
         let len: usize = std::str::from_utf8(&pdf[marker..marker + len_end]).unwrap().parse().unwrap();
@@ -189,10 +200,28 @@ mod tests {
     }
 
     #[test]
+    fn color_pages_are_rgb_and_need_three_bytes_per_pixel() {
+        let pixels: Vec<u8> = (0..30 * 20 * 3).map(|i| (i * 11 % 256) as u8).collect();
+        let pdf = build("x", &[spec(30, 20, vec![])], &pixels, true).unwrap();
+        assert!(String::from_utf8_lossy(&pdf).contains("/ColorSpace /DeviceRGB"));
+        let marker = find(&pdf, b"/FlateDecode /Length ").unwrap() + 21;
+        let len_end = pdf[marker..].iter().position(|b| *b == b' ').unwrap();
+        let len: usize = std::str::from_utf8(&pdf[marker..marker + len_end]).unwrap().parse().unwrap();
+        let start = marker + find(&pdf[marker..], b"stream\n").unwrap() + 7;
+        let mut decoded = Vec::new();
+        flate2::read::ZlibDecoder::new(&pdf[start..start + len]).read_to_end(&mut decoded).unwrap();
+        assert_eq!(decoded, pixels);
+        // one byte per pixel is not enough for a color page, and three is too many for a gray one
+        assert!(build("x", &[spec(30, 20, vec![])], &pixels[..600], true).is_err());
+        assert!(build("x", &[spec(30, 20, vec![])], &pixels, false).is_err());
+        assert!(String::from_utf8_lossy(&build("x", &[spec(30, 20, vec![])], &pixels[..600], false).unwrap()).contains("/DeviceGray"));
+    }
+
+    #[test]
     fn links_point_at_the_right_page_and_flip_the_y_axis() {
         let pixels = vec![255u8; 2 * 150 * 300];
         let link = Link { x: 15.0, y: 30.0, w: 75.0, h: 60.0, page: 2 };
-        let pdf = build("x", &[spec(150, 300, vec![link]), spec(150, 300, vec![])], &pixels).unwrap();
+        let pdf = build("x", &[spec(150, 300, vec![link]), spec(150, 300, vec![])], &pixels, false).unwrap();
         let text = String::from_utf8_lossy(&pdf);
         // page 2 is object 4; page height 300 px = 144 pt; y range 30..90 px -> 144-43.2 .. 144-14.4
         assert!(text.contains("/Rect [7.2 100.8 43.2 129.6]"), "{text}");
@@ -204,19 +233,19 @@ mod tests {
     fn links_to_missing_pages_are_dropped() {
         let pixels = vec![0u8; 10 * 10];
         let link = Link { x: 0.0, y: 0.0, w: 5.0, h: 5.0, page: 9 };
-        let pdf = build("x", &[spec(10, 10, vec![link])], &pixels).unwrap();
+        let pdf = build("x", &[spec(10, 10, vec![link])], &pixels, false).unwrap();
         assert!(!String::from_utf8_lossy(&pdf).contains("/Annot "));
     }
 
     #[test]
     fn mismatched_pixel_count_is_rejected() {
-        assert!(build("x", &[spec(10, 10, vec![])], &[0u8; 99]).is_err());
-        assert!(build("x", &[], &[]).is_err());
+        assert!(build("x", &[spec(10, 10, vec![])], &[0u8; 99], false).is_err());
+        assert!(build("x", &[], &[], false).is_err());
     }
 
     #[test]
     fn title_is_utf16_hex() {
-        let pdf = build("Дашборд", &[spec(2, 2, vec![])], &[0u8; 4]).unwrap();
+        let pdf = build("Дашборд", &[spec(2, 2, vec![])], &[0u8; 4], false).unwrap();
         assert!(String::from_utf8_lossy(&pdf).contains("/Title <FEFF0414"));
     }
 }

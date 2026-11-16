@@ -155,6 +155,9 @@ struct PublishMeta {
     folder: String,
     display: bool,
     pages: Vec<PageSpec>,
+    /// the pixels are R, G, B bytes (a color reader) instead of one gray byte
+    #[serde(default)]
+    color: bool,
     /// where to publish; absent means the paired Digital Paper
     #[serde(default)]
     target: Option<Target>,
@@ -201,7 +204,7 @@ pub async fn dashboard_publish(state: State<'_, Shared>, request: Request<'_>) -
     let c = state.client()?;
     let settings = store::load_settings(&state.dir);
     blocking(move || {
-        let pdf = pdf::build(&meta.name, &meta.pages, &pixels)?;
+        let pdf = pdf::build(&meta.name, &meta.pages, &pixels, meta.color)?;
         let folder = if meta.folder.trim().is_empty() { settings.dashboard_folder.clone() } else { store::normalize_remote_folder(&meta.folder) };
         let name = format!("{}.pdf", file_stem(&meta.name));
         let len = pdf.len();
@@ -218,19 +221,20 @@ pub async fn dashboard_publish(state: State<'_, Shared>, request: Request<'_>) -
 async fn publish_to_usb_reader(state: &crate::state::AppState, meta: &PublishMeta, pixels: &[u8], reader_id: &str, folder: &str, format: &str) -> CmdResult<PublishResult> {
     let stem = file_stem(&meta.name);
     let files: Vec<(String, Vec<u8>)> = match format {
-        "pdf" => vec![(format!("{stem}.pdf"), pdf::build(&meta.name, &meta.pages, pixels)?)],
+        "pdf" => vec![(format!("{stem}.pdf"), pdf::build(&meta.name, &meta.pages, pixels, meta.color)?)],
         "png" | "template" => {
             let single = meta.pages.len() == 1;
-            let expected: usize = meta.pages.iter().map(|p| p.width as usize * p.height as usize).sum();
+            let ch = pdf::bytes_per_pixel(meta.color);
+            let expected: usize = meta.pages.iter().map(|p| p.width as usize * p.height as usize * ch).sum();
             if expected != pixels.len() {
                 return Err(format!("page sizes add up to {expected} bytes but {} arrived", pixels.len()));
             }
             let mut offset = 0;
             let mut out = Vec::new();
             for (i, p) in meta.pages.iter().enumerate() {
-                let len = p.width as usize * p.height as usize;
+                let len = p.width as usize * p.height as usize * ch;
                 let name = if single { format!("{stem}.png") } else { format!("{stem} - {}.png", i + 1) };
-                out.push((name, pngout::encode_gray(p.width, p.height, &pixels[offset..offset + len])?));
+                out.push((name, pngout::encode(p.width, p.height, &pixels[offset..offset + len], meta.color)?));
                 offset += len;
             }
             out
@@ -250,7 +254,7 @@ pub async fn dashboard_export_pdf(request: Request<'_>) -> CmdResult<()> {
     let (meta, pixels) = parse(&request)?;
     let dest = header(&request, "x-dest")?;
     blocking(move || {
-        let pdf = pdf::build(&meta.name, &meta.pages, &pixels)?;
+        let pdf = pdf::build(&meta.name, &meta.pages, &pixels, meta.color)?;
         fs::write(&dest, pdf).map_err(|e| format!("Could not write the file: {e}"))
     })
     .await?

@@ -34,8 +34,10 @@ export function uniqueName(base: string, taken: string[]): string {
 
 export async function createFromSample(sample: Sample, taken: string[]): Promise<Dashboard> {
   const d = sample.make(uniqueName(sample.id === 'blank' ? 'New dashboard' : sample.label, taken));
-  // a new dashboard goes to the reader the app is showing right now
-  return saveDashboard({ ...d, publish: { ...d.publish, ...targetFor(activeReader()) } });
+  // a new dashboard goes to the reader the app is showing right now, in the file format the sample is made for (when that reader takes it)
+  const to = targetFor(activeReader());
+  const target = to.target?.kind === 'mtp' && sample.format ? { ...to, target: { ...to.target, format: sample.format } } : to;
+  return saveDashboard({ ...d, publish: { ...d.publish, ...target } });
 }
 
 /** a separate document with the same pages (page and widget ids may repeat: they only need to be unique within one document) */

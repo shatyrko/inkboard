@@ -13,6 +13,12 @@ export type TargetFields = Pick<PublishOptions, 'target' | 'targetName'>;
 /** the dashboard's target; the Digital Paper when it has none */
 export const targetOf = (d: Dashboard | null | undefined): PublishTarget => d?.publish?.target ?? DPT_TARGET;
 
+/** Is the dashboard drawn in color? Only for pictures and PDFs on a USB reader, and only when the dashboard says so: a pen template is a page to write on and the Digital Paper has a gray screen. */
+export const colorOf = (d: Dashboard | null | undefined): boolean => {
+  const t = targetOf(d);
+  return t.kind === 'mtp' && t.format !== 'template' && d?.publish?.color === true;
+};
+
 /** Reader.id of the target */
 export const targetReaderId = (t: PublishTarget): string => (t.kind === 'mtp' ? t.readerId : DPT_ID);
 

@@ -37,6 +37,19 @@ export async function ensureFonts(sample: string): Promise<void> {
   await Promise.all(jobs);
 }
 
+/** Loads webfonts that widgets ask for by name (the type specimen); a face that cannot be loaded is simply drawn in the fallback. */
+export async function ensureTypefaces(needs: { family: string; weight: number; text: string }[]): Promise<void> {
+  if (typeof document === 'undefined' || !document.fonts) return;
+  const unique = new Map<string, { family: string; weight: number; chars: Set<string> }>();
+  for (const n of needs) {
+    const key = `${n.weight} ${n.family}`;
+    const entry = unique.get(key) ?? { family: n.family, weight: n.weight, chars: new Set<string>() };
+    for (const c of `0123456789 .,:-${n.text}`) entry.chars.add(c);
+    unique.set(key, entry);
+  }
+  await Promise.all([...unique.values()].map((e) => document.fonts.load(font(e.weight, 32, e.family), [...e.chars].join('')).catch(() => [])));
+}
+
 /** every piece of text a dashboard can draw (names, widget props, fetched text), for ensureFonts; image data is left out */
 export function fontSample(d: Dashboard, data: DataBag): string {
   const parts: string[] = [d.name];

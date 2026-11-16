@@ -1,0 +1,27 @@
+/* Typefaces for the "Type specimen" widget, bundled so a dashboard looks the same on every computer (all SIL Open Font License).
+   The dashboard renderer loads them on demand: a face is only fetched when a specimen on the page uses it. */
+@import '@fontsource-variable/literata/wght.css';
+@import '@fontsource-variable/merriweather/wght.css';
+@import '@fontsource-variable/source-serif-4/wght.css';
+@import '@fontsource-variable/lora/wght.css';
+@import '@fontsource-variable/eb-garamond/wght.css';
+@import '@fontsource-variable/noto-serif/wght.css';
+@import '@fontsource-variable/crimson-pro/wght.css';
+@import '@fontsource/pt-serif/400.css';
+@import '@fontsource/pt-serif/700.css';
+
+@import '@fontsource-variable/roboto/wght.css';
+@import '@fontsource-variable/open-sans/wght.css';
+@import '@fontsource-variable/noto-sans/wght.css';
+@import '@fontsource-variable/source-sans-3/wght.css';
+@import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
+@import '@fontsource-variable/lexend/wght.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/700.css';
+
+@import '@fontsource-variable/jetbrains-mono/wght.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/700.css';
+
+@import '@fontsource/opendyslexic/400.css';
+@import '@fontsource/opendyslexic/700.css';

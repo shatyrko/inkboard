@@ -178,6 +178,13 @@ const peek = (w: NonNullable<typeof selected.value>) => {
             </select>
             <div class="hint">Drawn at the reader's own size, so lines and text stay sharp.</div>
           </div>
+          <div v-if="target.format !== 'template'" class="field">
+            <div class="row">
+              <label for="d-color" class="grow sw-label">Color</label>
+              <button id="d-color" class="switch" role="switch" :aria-checked="doc.publish?.color === true" aria-label="Color" @click="ed.setPublish({ ...doc.publish, color: !(doc.publish?.color === true) })"></button>
+            </div>
+            <div class="hint">For a color e-ink screen. Only widgets that use color (the type specimen) show it; the files get about three times bigger.</div>
+          </div>
         </template>
 
         <div v-else class="field">

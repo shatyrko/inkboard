@@ -30,6 +30,24 @@ export interface WidgetProps {
   box: { shape: 'rect' | 'rounded' | 'line'; stroke: number; fill: FillLevel; radius: number };
   link: { label: string; /** "next", "prev", "first", "last" or a page id */ target: string; look: 'solid' | 'outline'; size: number };
   nav: { size: number };
+  specimen: {
+    /** ids from typefaces.ts, in the order they are shown */
+    fonts: string[];
+    /** comma-separated sizes in page pixels, e.g. "16, 20, 26, 34" */
+    sizes: string;
+    sample: string;
+    /** repeat the sample along each line until the line is full */
+    fill: boolean;
+    weight: 'regular' | 'medium' | 'semibold' | 'bold';
+    columns: number;
+    /** font name and size next to every line */
+    labels: boolean;
+    /** 'color': each size in another ink color (only when the dashboard is published in color) */
+    ink: 'black' | 'color';
+    /** 'tint': a light background behind every line (colored in color, gray otherwise) */
+    backdrop: 'none' | 'tint';
+    border: boolean;
+  };
 }
 export type WidgetType = keyof WidgetProps;
 
@@ -52,6 +70,8 @@ export type PublishOptions = {
   targetName?: string;
   /** pictures for a USB reader: its own screen size ('native', the default) or the standard page size */
   resolution?: 'native' | 'standard';
+  /** pictures and PDFs for a USB reader in color instead of gray (a color e-ink screen); the Digital Paper is gray only */
+  color?: boolean;
 };
 export type Dashboard = {
   version: 1;
@@ -154,6 +174,7 @@ export function migrateDashboard(raw: unknown, fallbackId = newId()): Dashboard 
   if (typeof pub.display === 'boolean') p.display = pub.display;
   if (typeof pub.targetName === 'string' && pub.targetName.trim()) p.targetName = pub.targetName.trim();
   if (pub.resolution === 'native' || pub.resolution === 'standard') p.resolution = pub.resolution;
+  if (typeof pub.color === 'boolean') p.color = pub.color;
   d.publish = p;
   return d;
 }

@@ -292,3 +292,36 @@ fn dashboards_are_saved_to_a_usb_reader_as_pdf_or_png() {
     // a pixel buffer of the wrong size is refused
     assert!(publish(&w, json!({ "name": "Bad", "folder": "", "display": false, "pages": [page], "target": { "kind": "mtp", "readerId": id, "folder": "", "format": "png" } }), vec![0; 5]).is_err());
 }
+
+#[test]
+fn color_dashboards_arrive_as_rgb_pictures_and_pdfs() {
+    let id = virtual_reader("publish-color");
+    let dir = temp_dir("usb-publish-color");
+    let w = app(dir.clone());
+    let storage = call(&w, "mtp_status", json!({ "id": id })).unwrap()["storages"][0]["id"].as_u64().unwrap();
+    let page = json!({ "width": 40, "height": 30, "links": [] });
+    let target = |folder: &str, format: &str| json!({ "kind": "mtp", "readerId": id, "folder": folder, "format": format });
+    let rgb: Vec<u8> = (0..40 * 30 * 3).map(|i| (i * 7 % 256) as u8).collect();
+
+    let out = publish(&w, json!({ "name": "Palette", "folder": "", "display": false, "color": true, "pages": [page], "target": target("Pictures/Color", "png") }), rgb.clone()).unwrap();
+    assert_eq!(out["path"], "Pictures/Color/Palette.png");
+    publish(&w, json!({ "name": "Palette", "folder": "", "display": false, "color": true, "pages": [page], "target": target("Documents/Color", "pdf") }), rgb.clone()).unwrap();
+
+    // the picture on the device decodes as RGB with the same pixels
+    let list = |parent: Value| call(&w, "mtp_list", json!({ "id": id, "storage": storage, "parent": parent })).unwrap();
+    let find = |entries: &Value, name: &str| entries.as_array().unwrap().iter().find(|e| e["name"] == name).unwrap_or_else(|| panic!("{name} missing"))["handle"].clone();
+    let pictures = find(&list(Value::Null), "Pictures");
+    let folder = find(&list(pictures), "Color");
+    let file = find(&list(folder), "Palette.png");
+    let dest = dir.join("Palette.png");
+    call(&w, "mtp_download", json!({ "id": id, "storage": storage, "handle": file, "dest": dest.to_str().unwrap() })).unwrap();
+    let mut reader = png::Decoder::new(std::io::Cursor::new(std::fs::read(&dest).unwrap())).read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size().unwrap()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    assert_eq!(info.color_type, png::ColorType::Rgb);
+    assert_eq!(&buf[..rgb.len()], &rgb[..]);
+
+    // gray bytes for a color page, and RGB bytes for a gray page, are both refused
+    assert!(publish(&w, json!({ "name": "Bad", "folder": "", "display": false, "color": true, "pages": [page], "target": target("", "png") }), vec![0; 40 * 30]).is_err());
+    assert!(publish(&w, json!({ "name": "Bad", "folder": "", "display": false, "pages": [page], "target": target("", "pdf") }), rgb).is_err());
+}

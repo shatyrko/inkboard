@@ -5,11 +5,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { MenuItem } from '../lib/contextmenu';
 import Icon from '../components/Icon.vue';
 import type { DataBag } from './data';
-import { ensureFonts, fontSample } from './fonts';
 import { CELL, HANDLES, fitScale, moveRect, pageSize, resizeRect, snapToCell, type Handle, type Rect } from './grid';
 import type { Dashboard, Page, Widget } from './model';
 import { widgetAt } from './ops';
-import { renderPage } from './render';
+import { colorOf } from './publish-target';
+import { ensureDashboardFonts, renderPage } from './render';
 import { registry } from './widgets';
 
 const props = defineProps<{
@@ -61,7 +61,7 @@ let token = 0;
 
 async function render() {
   const mine = ++token;
-  await ensureFonts(fontSample(props.dashboard, props.data));
+  await ensureDashboardFonts(props.dashboard, props.data);
   const c = canvas.value;
   if (mine !== token || !c) return;
   const dpr = window.devicePixelRatio || 1;
@@ -70,7 +70,7 @@ async function render() {
   const g = c.getContext('2d');
   if (!g) return;
   g.setTransform(w / size.value.width, 0, 0, h / size.value.height, 0, 0);
-  renderPage(g, props.page, { ...props.data, now: new Date() }, { width: size.value.width, height: size.value.height, dashboard: props.dashboard, pageIndex: props.pageIndex });
+  renderPage(g, props.page, { ...props.data, now: new Date() }, { width: size.value.width, height: size.value.height, dashboard: props.dashboard, pageIndex: props.pageIndex, color: colorOf(props.dashboard) });
 }
 
 function schedule(throttle: boolean) {

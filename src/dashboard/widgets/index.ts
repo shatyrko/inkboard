@@ -11,6 +11,7 @@ import { imageWidget } from './image';
 import { linkWidget } from './link';
 import { navWidget } from './nav';
 import { readerWidget } from './reader';
+import { specimenWidget } from './specimen';
 import { systemWidget } from './system';
 import { textWidget } from './text';
 import { webWidget } from './web';
@@ -30,6 +31,7 @@ export const registry: { [K in WidgetType]: WidgetDef<K, any> } = {
   box: boxWidget,
   link: linkWidget,
   nav: navWidget,
+  specimen: specimenWidget,
 };
 
 export const isWidgetType = (v: unknown): v is WidgetType => typeof v === 'string' && Object.prototype.hasOwnProperty.call(registry, v);
