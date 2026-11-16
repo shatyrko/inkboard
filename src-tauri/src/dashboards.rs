@@ -219,7 +219,7 @@ async fn publish_to_usb_reader(state: &crate::state::AppState, meta: &PublishMet
     let stem = file_stem(&meta.name);
     let files: Vec<(String, Vec<u8>)> = match format {
         "pdf" => vec![(format!("{stem}.pdf"), pdf::build(&meta.name, &meta.pages, pixels)?)],
-        "png" => {
+        "png" | "template" => {
             let single = meta.pages.len() == 1;
             let expected: usize = meta.pages.iter().map(|p| p.width as usize * p.height as usize).sum();
             if expected != pixels.len() {

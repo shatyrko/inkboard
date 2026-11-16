@@ -1,7 +1,7 @@
 // Which reader a dashboard is published to, and the small decisions around it. Pure: the readers list comes in as an argument.
 import { fmtBytes } from '../lib/format';
 import { capabilities, readerTitle } from '../lib/readers';
-import type { PublishResult, PublishTarget, Reader, ReaderKind } from '../lib/types';
+import type { PublishFormat, PublishResult, PublishTarget, Reader, ReaderKind } from '../lib/types';
 import type { Dashboard, PublishOptions } from './model';
 
 export const DPT_ID = 'dpt';
@@ -18,7 +18,18 @@ export const targetReaderId = (t: PublishTarget): string => (t.kind === 'mtp' ? 
 export const kindOfTarget = (t: PublishTarget): ReaderKind => (t.kind === 'mtp' ? 'mtp' : 'digital-paper');
 
 /** where the reader puts a file when the folder is left empty (the Rust side applies the same defaults) */
-export const defaultFolder = (format: 'pdf' | 'png'): string => (format === 'png' ? 'Pictures/Inkboard' : 'Documents/Inkboard');
+export function defaultFolder(format: PublishFormat): string {
+  if (format === 'template') return 'noteTemplate';
+  return format === 'png' ? 'Pictures/Inkboard' : 'Documents/Inkboard';
+}
+
+export const FORMAT_LABEL: Record<PublishFormat, string> = { pdf: 'PDF', png: 'PNG per page', template: 'Pen template' };
+
+/** the one-line explanation under the format control */
+export function formatHint(format: PublishFormat): string {
+  if (format === 'template') return "A page to write on with the reader's pen. Page links do not work in templates.";
+  return format === 'png' ? 'One image per page. Page links do not work in images.' : 'One file with every page. Page links work.';
+}
 
 /** The target a new dashboard starts with: the reader the app is showing right now. */
 export function targetFor(reader: Reader | null): TargetFields {
@@ -76,6 +87,14 @@ export function describePushed(d: Dashboard, result: PublishResult, readers: Rea
   if (target.kind === 'dpt') {
     return `Published "${d.name}" to ${result.path} (${result.pages} ${result.pages === 1 ? 'page' : 'pages'}, ${fmtBytes(result.bytes)})`;
   }
-  const where = `${result.path} on ${targetName(d, readers)}`;
+  const reader = targetName(d, readers);
+  if (target.format === 'template') {
+    // a single page is reported as "folder/Name.png", several as the folder itself
+    const folder = result.pages > 1 ? result.path : result.path.replace(/\/[^/]*$/, '');
+    return result.pages > 1
+      ? `Saved ${result.pages} pen templates to ${folder} on ${reader}. In Boox Notes, pick them under Template > Custom.`
+      : `Saved as a pen template to ${folder} on ${reader}. In Boox Notes, pick it under Template > Custom.`;
+  }
+  const where = `${result.path} on ${reader}`;
   return target.format === 'png' && result.pages > 1 ? `Saved ${result.pages} images to ${where}` : `Saved to ${where}`;
 }

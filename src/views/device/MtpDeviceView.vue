@@ -67,11 +67,13 @@ const rows = computed(() => {
 const works = computed(() => [
   caps.files === 'filesystem' ? 'Browse the files and folders; upload, download, rename, move and delete them' : '',
   caps.dashboardFormats.length ? `Publish dashboards as ${caps.dashboardFormats.map((f) => f.toUpperCase()).join(' or ')} files` : '',
+  'Pen note templates: pictures or dashboard pages saved to the noteTemplate folder show up in Boox Notes',
 ].filter(Boolean));
 const onReader = computed(() => [
   !caps.openOnReader ? "Showing a dashboard on its screen: open the file from the reader's own file app" : '',
   !caps.deviceSettings ? 'Date and time, Wi-Fi, standby and the like: change them on the reader' : '',
   !caps.screenMirror ? "Showing the reader's screen here" : '',
+  'Handwritten notes live inside the Notes app and are exported from there: Inkboard cannot read them over USB',
 ].filter(Boolean));
 
 const copyMenu = (what: string, value: string) => (): MenuItem[] => [{ label: `Copy ${what.toLowerCase()}`, icon: 'copy', action: () => copyText(value, `${what} copied`) }];

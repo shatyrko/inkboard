@@ -282,6 +282,13 @@ fn dashboards_are_saved_to_a_usb_reader_as_pdf_or_png() {
     pngs.sort();
     assert_eq!(pngs, ["Wall - 1.png", "Wall - 2.png"]);
 
+    // a pen template goes into the noteTemplate folder at the storage root
+    let out = publish(&w, json!({ "name": "Planner", "folder": "", "display": false, "pages": [page], "target": { "kind": "mtp", "readerId": id, "folder": "", "format": "template" } }), vec![220; 40 * 30]).unwrap();
+    assert_eq!(out["path"], "noteTemplate/Planner.png");
+    let root = call(&w, "mtp_list", json!({ "id": id, "storage": storage, "parent": null })).unwrap();
+    let tpl = root.as_array().unwrap().iter().find(|e| e["name"] == "noteTemplate").expect("template folder created")["handle"].clone();
+    assert_eq!(names(&call(&w, "mtp_list", json!({ "id": id, "storage": storage, "parent": tpl })).unwrap()), ["Planner.png"]);
+
     // a pixel buffer of the wrong size is refused
     assert!(publish(&w, json!({ "name": "Bad", "folder": "", "display": false, "pages": [page], "target": { "kind": "mtp", "readerId": id, "folder": "", "format": "png" } }), vec![0; 5]).is_err());
 }

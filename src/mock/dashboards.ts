@@ -87,7 +87,7 @@ function saveToUsb(meta: PublishMeta, pixels: Uint8Array): PublishResult {
     addMockFile(target.readerId, folder, name, bytes);
     return { path: `${folder}/${name}`, entryId: '', pages, bytes };
   }
-  // one PNG per page: "Name.png" for a single page, "Name - 1.png", "Name - 2.png" ... for several
+  // png and pen template: one PNG per page, "Name.png" for a single page, "Name - 1.png", "Name - 2.png" ... for several
   const each = Math.max(20_000, Math.round(pixels.length / Math.max(1, pages) / 12));
   const names = pages === 1 ? [`${meta.name}.png`] : meta.pages.map((_, i) => `${meta.name} - ${i + 1}.png`);
   for (const name of names) addMockFile(target.readerId, folder, name, each);

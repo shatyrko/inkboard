@@ -37,7 +37,7 @@ let nodes: Node[] = [];
 
 const ROOT_FOLDERS = [
   'Alarms', 'Android', 'Audiobooks', 'Backups', 'Books', 'Comics', 'DCIM', 'Dictionaries', 'Documents', 'Download', 'Fonts', 'Movies',
-  'Music', 'Notes', 'Notifications', 'Pictures', 'Podcasts', 'Recordings', 'Ringtones', 'Scans', 'Screenshots', 'Sketches', 'Templates', 'Wallpapers',
+  'Music', 'Notes', 'noteTemplate', 'Notifications', 'Pictures', 'Podcasts', 'Recordings', 'Ringtones', 'Scans', 'Screenshots', 'Sketches', 'Wallpapers',
 ];
 
 /** [name, megabytes, days since it was changed] */

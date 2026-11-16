@@ -1,5 +1,5 @@
 // What each kind of reader can do, so the views can offer exactly that and nothing else.
-import type { Reader, ReaderKind } from './types';
+import type { PublishFormat, Reader, ReaderKind } from './types';
 
 export type Capabilities = {
   /** 'documents': the reader's own library of PDFs (folders and documents). 'filesystem': a plain file manager over USB. */
@@ -12,12 +12,12 @@ export type Capabilities = {
   /** the app can open a document on the reader's screen */
   openOnReader: boolean;
   /** dashboard file formats the reader can show */
-  dashboardFormats: ('pdf' | 'png')[];
+  dashboardFormats: PublishFormat[];
 };
 
 const TABLE: Record<ReaderKind, Capabilities> = {
   'digital-paper': { files: 'documents', deviceSettings: true, wifiManagement: true, screenMirror: true, openOnReader: true, dashboardFormats: ['pdf'] },
-  mtp: { files: 'filesystem', deviceSettings: false, wifiManagement: false, screenMirror: false, openOnReader: false, dashboardFormats: ['pdf', 'png'] },
+  mtp: { files: 'filesystem', deviceSettings: false, wifiManagement: false, screenMirror: false, openOnReader: false, dashboardFormats: ['pdf', 'png', 'template'] },
 };
 
 export const capabilities = (kind: ReaderKind): Capabilities => TABLE[kind];

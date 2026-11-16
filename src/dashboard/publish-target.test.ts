@@ -3,7 +3,7 @@ import type { PublishResult, PublishTarget, Reader } from '../lib/types';
 import { newDashboard, type Dashboard } from './model';
 import { buildMeta } from './publish';
 import {
-  DPT_TARGET, defaultFolder, describePushed, isTargetReachable, kindOfTarget, retarget, targetFor, targetName, targetOf, targetOptions, targetReaderId,
+  DPT_TARGET, FORMAT_LABEL, defaultFolder, describePushed, formatHint, isTargetReachable, kindOfTarget, retarget, targetFor, targetName, targetOf, targetOptions, targetReaderId,
 } from './publish-target';
 
 const dpt = (connected = true): Reader => ({ id: 'dpt', kind: 'digital-paper', name: 'DPT-RP1', maker: 'Sony', connected, link: 'wifi' });
@@ -31,6 +31,14 @@ describe('target of a dashboard', () => {
   it('shows the folder a reader uses when the field is empty', () => {
     expect(defaultFolder('pdf')).toBe('Documents/Inkboard');
     expect(defaultFolder('png')).toBe('Pictures/Inkboard');
+    expect(defaultFolder('template')).toBe('noteTemplate');
+  });
+
+  it('labels and explains each format', () => {
+    expect(FORMAT_LABEL).toEqual({ pdf: 'PDF', png: 'PNG per page', template: 'Pen template' });
+    expect(formatHint('pdf')).toContain('Page links work');
+    expect(formatHint('png')).toBe('One image per page. Page links do not work in images.');
+    expect(formatHint('template')).toBe("A page to write on with the reader's pen. Page links do not work in templates.");
   });
 });
 
@@ -121,6 +129,25 @@ describe('names and messages', () => {
     expect(describePushed(png, result({ path: 'Pictures/Inkboard/Wall.png' }), [boox()])).toBe('Saved to Pictures/Inkboard/Wall.png on Tab X C');
     expect(describePushed(png, result({ path: 'Pictures/Inkboard', pages: 3 }), [boox()])).toBe('Saved 3 images to Pictures/Inkboard on Tab X C');
     expect(describePushed(toBoox(), result(), [boox()])).not.toMatch(/open/i);
+  });
+
+  it('tells where a pen template went and where to pick it in Boox Notes', () => {
+    const tpl = toBoox({ format: 'template' });
+    expect(describePushed(tpl, result({ path: 'noteTemplate/Wall.png' }), [boox()])).toBe(
+      'Saved as a pen template to noteTemplate on Tab X C. In Boox Notes, pick it under Template > Custom.',
+    );
+    expect(describePushed(tpl, result({ path: 'noteTemplate', pages: 3 }), [boox()])).toBe(
+      'Saved 3 pen templates to noteTemplate on Tab X C. In Boox Notes, pick them under Template > Custom.',
+    );
+    const custom = toBoox({ format: 'template', folder: 'Notes/noteTemplate' });
+    expect(describePushed(custom, result({ path: 'Notes/noteTemplate/Wall.png' }), [boox()])).toContain('to Notes/noteTemplate on Tab X C');
+  });
+});
+
+describe('buildMeta with a pen template target', () => {
+  it('sends the template format along like any USB target', () => {
+    const d = toBoox({ format: 'template' });
+    expect(buildMeta(d, [{ width: 1650, height: 2200, links: [] }], { displayAfterPush: true })).toMatchObject({ folder: '', display: false, target: { kind: 'mtp', format: 'template', folder: '' } });
   });
 });
 

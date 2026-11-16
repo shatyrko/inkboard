@@ -18,7 +18,8 @@ Built with Tauri 2, Rust and Vue 3. Linux is the platform it is developed on; th
 | Settings on the reader (clock, time zone, standby, Wi-Fi) | yes | no, change them on the reader |
 | Live mirror of the screen | yes | no |
 | Open a document on the reader's screen | yes | no, open it from the reader's own file app |
-| Dashboards | PDF, opened right after publishing | PDF or PNG pages saved to a folder |
+| Dashboards | PDF, opened right after publishing | PDF, PNG pages, or a pen template saved to a folder |
+| Pen | pen battery shown; note templates in Settings | pages saved to `noteTemplate` appear as custom templates in Boox Notes |
 
 Switch between readers with the selector at the top of the sidebar. A USB reader shows up there by itself when it is plugged
 in and set to file transfer (MTP). On Linux, the `libmtp` package ships the udev rules that let a normal user talk to it.

@@ -89,6 +89,10 @@ describe('migrateDashboard', () => {
     expect(d.publish).toEqual({ target: { kind: 'mtp', readerId: 'mtp:ab12', folder: 'Documents/Wall', format: 'png' }, targetName: 'Tab X C' });
   });
 
+  it('keeps the pen template format', () => {
+    expect(migrateDashboard({ publish: { target: { kind: 'mtp', readerId: 'mtp:x', format: 'template' } } }).publish?.target).toEqual({ kind: 'mtp', readerId: 'mtp:x', folder: '', format: 'template' });
+  });
+
   it('repairs a broken USB target: unknown formats become PDF, targets without a reader become the Digital Paper', () => {
     expect(migrateDashboard({ publish: { target: { kind: 'mtp', readerId: 'mtp:x', format: 'gif', folder: 7 } } }).publish?.target).toEqual({ kind: 'mtp', readerId: 'mtp:x', folder: '', format: 'pdf' });
     for (const target of [{ kind: 'mtp' }, { kind: 'mtp', readerId: '' }, { kind: 'floppy' }, 'mtp', null, 5]) {

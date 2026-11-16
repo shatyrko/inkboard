@@ -21,6 +21,7 @@ import { filterEntries, sortEntries, type MtpSortKey, type SortDir } from './lis
 import MtpFolderPicker from './MtpFolderPicker.vue';
 import MtpTable from './MtpTable.vue';
 import { currentHandle, enterFolder, goTo, goUp, startStack, type Crumb } from './nav';
+import { tipFor } from './tips';
 
 const reader = computed(() => activeReader());
 const readerId = computed(() => reader.value?.id ?? '');
@@ -50,7 +51,7 @@ const rows = computed(() => sortEntries(filterEntries(entries.value, term.value)
 const order = computed(() => rows.value.map((r) => String(r.handle)));
 const picked = computed(() => rows.value.filter((r) => sel.value.ids.has(String(r.handle))));
 const only = computed<MtpEntry | null>(() => (picked.value.length === 1 ? picked.value[0] : null));
-const books = computed(() => (atRoot.value ? entries.value.find((e) => e.kind === 'folder' && e.name.toLowerCase() === 'books') : undefined));
+const tip = computed(() => (searching.value ? null : tipFor(stack.value, entries.value)));
 const selectionNote = computed(() => {
   if (!picked.value.length) return plural(rows.value.length, 'item');
   const bytes = picked.value.reduce((n, e) => n + (e.kind === 'file' ? e.size : 0), 0);
@@ -349,9 +350,13 @@ const pickerTitle = computed(() => {
         <span class="note num">{{ selectionNote }}</span>
       </div>
 
-      <p v-if="books && !searching" class="tip">
+      <p v-if="tip?.kind === 'books'" class="tip">
         <Icon name="book" :size="16" />
-        <span>This reader opens EPUB, PDF, FB2, MOBI, CBZ and more as they are, so books need no conversion. Any folder works; <button class="link" @click="open(books)">Books</button> is the usual place.</span>
+        <span>This reader opens EPUB, PDF, FB2, MOBI, CBZ and more as they are, so books need no conversion. Any folder works; <button class="link" @click="open(tip.folder)">Books</button> is the usual place.</span>
+      </p>
+      <p v-else-if="tip?.kind === 'templates'" class="tip">
+        <Icon name="pen" :size="16" />
+        <span>Boox Notes reads pen templates from this folder: PNG pictures of the reader's screen size work best.</span>
       </p>
 
       <MtpTable

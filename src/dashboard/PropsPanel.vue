@@ -4,11 +4,12 @@ import { computed } from 'vue';
 import Icon from '../components/Icon.vue';
 import { capabilities } from '../lib/readers';
 import { app } from '../lib/store';
+import type { PublishFormat } from '../lib/types';
 import type { DataBag } from './data';
 import type { Editor } from './editor';
 import FieldForm from './FieldForm.vue';
 import { clamp } from './grid';
-import { defaultFolder, retarget, targetOf, targetOptions, targetReaderId } from './publish-target';
+import { FORMAT_LABEL, defaultFolder, formatHint, retarget, targetOf, targetOptions, targetReaderId } from './publish-target';
 import { drawOrder, sourceOf } from './render';
 import { registry } from './widgets';
 
@@ -31,12 +32,11 @@ const schedule = computed(() => doc.value?.schedule ?? { enabled: false, everyMi
 const target = computed(() => targetOf(doc.value));
 const readerOptions = computed(() => targetOptions(app.readers, target.value, { rememberedName: doc.value?.publish?.targetName, dptConnected: !!app.conn?.connected }));
 const formats = capabilities('mtp').dashboardFormats;
-const FORMAT_LABEL = { pdf: 'PDF', png: 'PNG per page' };
 
 function chooseReader(id: string) {
   props.ed.setPublish({ ...doc.value?.publish, ...retarget(id, app.readers, target.value) });
 }
-function patchUsbTarget(patch: { folder?: string; format?: 'pdf' | 'png' }) {
+function patchUsbTarget(patch: { folder?: string; format?: PublishFormat }) {
   const t = target.value;
   if (t.kind === 'mtp') props.ed.setPublish({ ...doc.value?.publish, target: { ...t, ...patch } });
 }
@@ -150,7 +150,7 @@ const peek = (w: NonNullable<typeof selected.value>) => {
             <div class="seg" role="radiogroup" aria-label="File format">
               <button v-for="f in formats" :key="f" role="radio" :aria-checked="target.format === f" :class="{ on: target.format === f }" @click="patchUsbTarget({ format: f })">{{ FORMAT_LABEL[f] }}</button>
             </div>
-            <div class="hint">{{ target.format === 'png' ? 'One image per page. Page links do not work in images.' : 'One file with every page. Page links work.' }}</div>
+            <div class="hint">{{ formatHint(target.format) }}</div>
           </div>
           <div class="field">
             <label for="d-usb-folder">Folder on the device</label>
@@ -217,7 +217,7 @@ const peek = (w: NonNullable<typeof selected.value>) => {
 .lbl { font-size: 12px; font-weight: 500; color: var(--muted); }
 .sw-label { font-size: 13px; color: var(--text); font-weight: 400; }
 .mono { font-family: var(--mono); font-size: 12px; }
-.seg { width: 100%; }
+.seg { width: 100%; flex-wrap: wrap; }
 .seg button { flex: 1; padding: 0 4px; white-space: nowrap; }
 .every { margin-top: 2px; }
 .quiet { margin: 0; }

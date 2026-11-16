@@ -163,4 +163,6 @@ export type MtpEntry = {
 /** Where a dashboard is published when the target is a USB reader. */
 export type PublishTarget =
   | { kind: 'dpt' }
-  | { kind: 'mtp'; readerId: string; /** folder on the device storage; empty = default for the format */ folder: string; format: 'pdf' | 'png' };
+  | { kind: 'mtp'; readerId: string; /** folder on the device storage; empty = default for the format */ folder: string; format: PublishFormat };
+/** 'pdf': one document. 'png': one picture per page. 'template': pictures saved where the reader's note app looks for pen templates (Boox: the noteTemplate folder), so the page can be written on with the pen. */
+export type PublishFormat = 'pdf' | 'png' | 'template';

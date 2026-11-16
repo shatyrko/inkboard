@@ -1,7 +1,7 @@
 // The dashboard document: what is stored by api.dashboardsSave and what the renderer and editor work on.
 // Documents are treated as immutable by the editor (see ops.ts), so snapshots can be shared freely by the undo history.
 import { clamp, clampRect, gridOf, type Bounds, type Orientation, type Rect } from './grid';
-import type { PublishTarget } from '../lib/types';
+import type { PublishFormat, PublishTarget } from '../lib/types';
 import { newId } from './ids';
 import { registry, isWidgetType } from './widgets';
 import type { AnyWidgetDef } from './widgets/types';
@@ -158,7 +158,8 @@ export function migrateDashboard(raw: unknown, fallbackId = newId()): Dashboard 
 /** a USB target keeps its reader, folder and format; anything else (including no target at all) is the Digital Paper */
 function migrateTarget(raw: unknown): PublishTarget {
   if (isRecord(raw) && raw.kind === 'mtp' && typeof raw.readerId === 'string' && raw.readerId) {
-    return { kind: 'mtp', readerId: raw.readerId, folder: str(raw.folder, '').trim(), format: raw.format === 'png' ? 'png' : 'pdf' };
+    const format: PublishFormat = raw.format === 'png' || raw.format === 'template' ? raw.format : 'pdf';
+    return { kind: 'mtp', readerId: raw.readerId, folder: str(raw.folder, '').trim(), format };
   }
   return { kind: 'dpt' };
 }

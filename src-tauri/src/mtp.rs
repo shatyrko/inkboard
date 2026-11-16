@@ -535,11 +535,13 @@ pub enum Target {
     Mtp { reader_id: String, folder: String, format: String },
 }
 
+/// `template` is a page to write on with the reader's pen: Boox Notes lists the pictures in the storage root's `noteTemplate` folder
+/// as custom templates.
 pub fn default_folder(format: &str) -> &'static str {
-    if format == "png" {
-        "Pictures/Inkboard"
-    } else {
-        "Documents/Inkboard"
+    match format {
+        "png" => "Pictures/Inkboard",
+        "template" => "noteTemplate",
+        _ => "Documents/Inkboard",
     }
 }
 
@@ -565,6 +567,7 @@ mod tests {
     fn default_folders_depend_on_the_format() {
         assert_eq!(default_folder("pdf"), "Documents/Inkboard");
         assert_eq!(default_folder("png"), "Pictures/Inkboard");
+        assert_eq!(default_folder("template"), "noteTemplate");
     }
 
     #[test]
