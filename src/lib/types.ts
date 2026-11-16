@@ -77,7 +77,13 @@ export type Entry = {
   totalPage: number;
   isNew: boolean;
 };
-export type UploadResult = { name: string; ok: boolean; error: string | null };
+export type UploadResult = {
+  name: string;
+  ok: boolean;
+  error: string | null;
+  /** something worth saying about a file that did go up, e.g. that tap squares could not be added to it */
+  note?: string | null;
+};
 export type TemplateEntry = { id: string; name: string };
 export type TransferProgress = { id: string; name: string; direction: 'up' | 'down'; sent: number; total: number; done: boolean; error: string | null };
 
@@ -123,6 +129,8 @@ export type AppSettings = {
   dashboardFolder: string;
   /** open the dashboard on the reader's screen right after uploading it */
   displayAfterPush: boolean;
+  /** PDFs uploaded to the Digital Paper get tap squares in the bottom corners, to turn pages with a tap instead of a swipe */
+  tapSquares: boolean;
 };
 
 // ---------- readers (more than one device) ----------

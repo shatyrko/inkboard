@@ -16,6 +16,7 @@ pub struct SettingsPatch {
     allow_commands: Option<bool>,
     dashboard_folder: Option<String>,
     display_after_push: Option<bool>,
+    tap_squares: Option<bool>,
 }
 
 #[tauri::command]
@@ -29,6 +30,9 @@ pub fn settings_set(state: State<'_, Shared>, patch: SettingsPatch) -> CmdResult
     }
     if let Some(v) = patch.display_after_push {
         s.display_after_push = v;
+    }
+    if let Some(v) = patch.tap_squares {
+        s.tap_squares = v;
     }
     store::save_settings(&state.dir, &s).map_err(err)?;
     Ok(s)

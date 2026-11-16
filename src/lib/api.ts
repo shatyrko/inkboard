@@ -72,6 +72,8 @@ export const api = {
   libraryList: () => call<Entry[]>('library_list'),
   /** `folder` is a remote path such as "Document/Books"; it is created when missing */
   libraryUpload: (paths: string[], folder: string) => call<UploadResult[]>('library_upload', { paths, folder }),
+  /** a copy of a document next to it, with tap squares added (the original is left alone) */
+  libraryAddTapSquares: (entryId: string) => call<UploadResult>('library_add_tap_squares', { entryId }),
   libraryDownload: (entryId: string, dest: string) => call<void>('library_download', { entryId, dest }),
   libraryDelete: (entryId: string, kind: 'document' | 'folder') => call<void>('library_delete', { entryId, kind }),
   libraryNewFolder: (path: string) => call<void>('library_new_folder', { path }),

@@ -74,6 +74,10 @@ async function commitFolder() {
         <div class="ctl"><button class="switch" role="switch" aria-label="Allow shell commands in dashboards" :aria-checked="app.settings.allowCommands" @click="setCommands(!app.settings.allowCommands)"></button></div>
       </div>
       <div class="setting">
+        <div class="t"><b>Tap squares for page turning</b><span>PDFs you upload get a 5 cm square in each bottom corner of every page: tap the left one for the previous page, the right one for the next. The swipe still works.</span></div>
+        <div class="ctl"><button class="switch" role="switch" aria-label="Tap squares for page turning" :aria-checked="app.settings.tapSquares" @click="patch({ tapSquares: !app.settings.tapSquares })"></button></div>
+      </div>
+      <div class="setting">
         <div class="t"><b>Dashboard folder on the reader</b><span>Where dashboards are uploaded. It is created if it does not exist.</span></div>
         <div class="ctl"><input v-model="folder" class="input mono selectable" aria-label="Dashboard folder on the reader" autocomplete="off" spellcheck="false" @blur="commitFolder" @keydown.enter="($event.target as HTMLInputElement).blur()" /></div>
       </div>

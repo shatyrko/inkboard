@@ -7,6 +7,7 @@ import { inTauri } from '../../lib/window';
 import { fileName, listNames, partitionPdfs, pickPdfFiles } from '../shared/files';
 import { plural } from '../shared/text';
 import { deleteBody, deleteTitle, planDelete } from './deletion';
+import { describeUpload } from './uploads';
 import { findByName, namesIn } from './listing';
 import { joinPath, parentPath, splitExt, uniqueName, validateName } from './paths';
 import type { FolderNode } from './tree';
@@ -162,10 +163,22 @@ export function createActions(env: ActionEnv) {
     const results = await attempt(() => api.libraryUpload(send, folder), 'Upload failed');
     await env.reload();
     if (!results) return;
-    const failed = results.filter((r) => !r.ok);
-    const ok = results.length - failed.length;
-    if (!failed.length) notify(`Uploaded ${plural(ok, 'document')}`);
-    else notify(`${ok} of ${results.length} uploaded. "${failed[0].name}": ${failed[0].error ?? 'failed'}`, 'error');
+    const outcome = describeUpload(results);
+    notify(outcome.text, outcome.failed ? 'error' : 'ok');
+  }
+
+  /** Copies of documents with tap squares added, next to the originals (which keep their place and their pen notes). */
+  async function addTapSquares(docs: Entry[]) {
+    const pdfs = docs.filter((d) => d.kind === 'document' && d.docType !== 'note');
+    if (!pdfs.length) return;
+    const made: string[] = [];
+    for (const d of pdfs) {
+      const result = await attempt(() => api.libraryAddTapSquares(d.id), `Could not add tap squares to "${d.name}"`);
+      if (!result) break;
+      made.push(result.name);
+    }
+    await env.reload();
+    if (made.length) notify(made.length === 1 ? `Saved "${made[0]}" next to the original` : `Saved ${plural(made.length, 'copy', 'copies')} with tap squares next to the originals`);
   }
 
   async function uploadFromPicker(folder: string) {
@@ -173,5 +186,5 @@ export function createActions(env: ActionEnv) {
     if (paths?.length) await upload(paths, folder);
   }
 
-  return { openOnReader, createFolder, rename, transfer, remove, download, upload, uploadFromPicker };
+  return { openOnReader, createFolder, rename, transfer, remove, download, upload, uploadFromPicker, addTapSquares };
 }

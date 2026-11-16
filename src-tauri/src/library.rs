@@ -1,7 +1,7 @@
 //! The reader's file library: listing, uploads and downloads with progress events, folders, moves, deletes.
 
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -11,6 +11,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Runtime, State};
 
 use crate::state::Shared;
+use crate::tapzones;
 use crate::util::{blocking, err, CmdResult, UploadResult};
 
 static TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -74,37 +75,85 @@ fn is_pdf(path: &Path) -> bool {
     path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("pdf")).unwrap_or(false)
 }
 
-fn upload_one(c: &Client, app: &AppHandle, path: &Path, folder: &str) -> Result<(), String> {
+/// Uploads one PDF. With `tap_squares` the file is first given tap squares for page turning; when that is not possible (encrypted,
+/// damaged, too large) it goes up unchanged and the note says why. Returns the note, if any.
+fn upload_one(c: &Client, app: &AppHandle, path: &Path, folder: &str, tap_squares: bool) -> Result<Option<String>, String> {
     if !is_pdf(path) {
         return Err("The reader only opens PDF files.".into());
     }
     let name = path.file_name().and_then(|n| n.to_str()).ok_or("The file name is not valid text.")?.to_string();
-    let file = File::open(path).map_err(|e| format!("Could not read the file: {e}"))?;
-    let len = file.metadata().map_err(err)?.len();
+    if !tap_squares {
+        let file = File::open(path).map_err(|e| format!("Could not read the file: {e}"))?;
+        let len = file.metadata().map_err(err)?.len();
+        let mut progress = Progress::new(app, &name, "up", len);
+        let result = c.upload_document(folder, &name, file, len, &mut |sent| progress.tick(sent)).map(|_| ()).map_err(err);
+        progress.finish(&result);
+        return result.map(|()| None);
+    }
+    let original = std::fs::read(path).map_err(|e| format!("Could not read the file: {e}"))?;
+    let (bytes, note) = match tapzones::add_tap_zones(&original) {
+        Ok(Some(changed)) => (changed, None),
+        Ok(None) => (original, None), // one page: nothing to turn
+        Err(why) => (original, Some(format!("Uploaded without tap squares: {why}."))),
+    };
+    let len = bytes.len() as u64;
     let mut progress = Progress::new(app, &name, "up", len);
-    let result = c.upload_document(folder, &name, file, len, &mut |sent| progress.tick(sent)).map(|_| ()).map_err(err);
+    let result = c.upload_document(folder, &name, Cursor::new(bytes), len, &mut |sent| progress.tick(sent)).map(|_| ()).map_err(err);
     progress.finish(&result);
-    result
+    result.map(|()| note)
 }
 
 #[tauri::command]
 pub async fn library_upload(app: AppHandle, state: State<'_, Shared>, paths: Vec<String>, folder: String) -> CmdResult<Vec<UploadResult>> {
     let c = state.client()?;
     let folder = crate::store::normalize_remote_folder(&folder);
+    let tap_squares = crate::store::load_settings(&state.dir).tap_squares;
     blocking(move || {
         paths
             .iter()
             .map(|p| {
                 let path = PathBuf::from(p);
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.clone());
-                match upload_one(&c, &app, &path, &folder) {
-                    Ok(()) => UploadResult::ok(name),
+                match upload_one(&c, &app, &path, &folder, tap_squares) {
+                    Ok(note) => UploadResult::ok_with_note(name, note),
                     Err(e) => UploadResult::failed(name, e),
                 }
             })
             .collect()
     })
     .await
+}
+
+/// Makes a copy of a document on the reader with tap squares added ("Name (tap squares).pdf" next to it). The original is left alone:
+/// it keeps its reading position and the notes written on it.
+#[tauri::command]
+pub async fn library_add_tap_squares(app: AppHandle, state: State<'_, Shared>, entry_id: String) -> CmdResult<UploadResult> {
+    let c = state.client()?;
+    blocking(move || {
+        let entry = c.list_entries().map_err(err)?.into_iter().find(|e| e.id == entry_id).ok_or("That document is no longer on the reader.")?;
+        let (folder, file) = entry.path.rsplit_once('/').ok_or("The document has no folder.")?;
+        let stem = file.strip_suffix(".pdf").or_else(|| file.strip_suffix(".PDF")).unwrap_or(file);
+        let copy = format!("{} (tap squares).pdf", stem.trim_end_matches(" (tap squares)"));
+
+        let mut bytes = Vec::new();
+        let mut down = Progress::new(&app, file, "down", entry.size);
+        let got = c.download_document(&entry_id, &mut bytes, &mut |done, total| {
+            if let Some(t) = total {
+                down.total = t;
+            }
+            down.tick(done);
+        });
+        down.finish(&got.map(|_| ()).map_err(err));
+        let changed = tapzones::add_tap_zones(&bytes).map_err(|why| format!("{why}."))?.ok_or("A one-page document has no pages to turn.")?;
+
+        let len = changed.len() as u64;
+        let mut up = Progress::new(&app, &copy, "up", len);
+        let result = c.upload_document(folder, &copy, Cursor::new(changed), len, &mut |sent| up.tick(sent)).map(|_| ()).map_err(err);
+        up.finish(&result);
+        result?;
+        Ok(UploadResult::ok(copy))
+    })
+    .await?
 }
 
 #[tauri::command]

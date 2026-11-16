@@ -12,14 +12,20 @@ pub struct UploadResult {
     name: String,
     ok: bool,
     error: Option<String>,
+    /// something worth telling the user about a file that did go up (for example that tap squares could not be added)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
 }
 
 impl UploadResult {
     pub fn ok(name: String) -> Self {
-        Self { name, ok: true, error: None }
+        Self { name, ok: true, error: None, note: None }
+    }
+    pub fn ok_with_note(name: String, note: Option<String>) -> Self {
+        Self { name, ok: true, error: None, note }
     }
     pub fn failed(name: String, error: String) -> Self {
-        Self { name, ok: false, error: Some(error) }
+        Self { name, ok: false, error: Some(error), note: None }
     }
 }
 

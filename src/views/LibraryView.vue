@@ -176,6 +176,8 @@ function rowMenu(e: Entry): MenuItem[] {
       { label: 'Rename', icon: 'edit', hint: 'F2', disabled: !one, action: renameSelection },
       { label: 'Move to...', icon: 'move', action: () => act(() => actions.transfer(list, 'move', current.value)) },
       { label: 'Copy to...', icon: 'duplicate', action: () => act(() => actions.transfer(list, 'copy', current.value)) },
+      { separator: true },
+      { label: 'Add tap squares (as a copy)', icon: 'wand', disabled: list.every((d) => d.docType === 'note'), action: () => act(() => actions.addTapSquares(list)) },
     );
   }
   if (items.length) items.push({ separator: true });

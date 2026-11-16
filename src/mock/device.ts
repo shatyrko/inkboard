@@ -76,7 +76,7 @@ const nearby: WifiScanResult[] = [
   { ssid: 'Open Hotspot', security: 'nonsec', signal: -80 },
 ];
 
-let settings: AppSettings = { allowCommands: false, dashboardFolder: 'Document/Dashboards', displayAfterPush: true };
+let settings: AppSettings = { allowCommands: false, dashboardFolder: 'Document/Dashboards', displayAfterPush: true, tapSquares: true };
 
 // ---------- library ----------
 let entries: Entry[] = mode === 'big' ? bigLibrary() : seedLibrary();
@@ -213,6 +213,18 @@ export const handlers: Record<string, (a: any) => unknown> = {
       out.push({ name, ok: true, error: null });
     }
     return out;
+  },
+  library_add_tap_squares: async ({ entryId }: { entryId: string }): Promise<UploadResult> => {
+    requireReader();
+    const e = find(entryId);
+    if (e.docType === 'note') throw 'Notes cannot be changed.';
+    await simulateTransfer(e.name, 'down', e.size);
+    const name = `${e.name.replace(/\.pdf$/i, '').replace(/ \(tap squares\)$/, '')} (tap squares).pdf`;
+    const path = `${e.path.slice(0, e.path.lastIndexOf('/'))}/${name}`;
+    await simulateTransfer(name, 'up', e.size);
+    entries = entries.filter((x) => x.path !== path);
+    entries.push(documentEntry(path, e.parentId, { name, pages: e.totalPage, mb: e.size / 1_000_000, modified: 0, isNew: true }));
+    return { name, ok: true, error: null };
   },
   library_download: async ({ entryId }: { entryId: string }) => {
     requireReader();

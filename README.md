@@ -42,6 +42,12 @@ needed. Its key lives in `~/.config/inkboard/adbkey` and the approval can be rev
 - Browse every folder and document, search, sort, multi-select.
 - Upload PDFs (picker or drag and drop), download, rename, move, copy, delete, new folders, open a document on the reader's screen.
 - Transfer progress for large files.
+- **Tap squares.** The reader turns pages by swiping, and its swipe detection is unreliable. It does follow PDF links when they are
+  tapped, so every PDF you upload gets two invisible link squares of 5 cm (measured on the reader's screen) in the bottom corners of each
+  page: tap the left one for the previous page, the right one for the next. This does not touch the firmware, and the swipe still works.
+  The squares are appended to the file as a standard incremental PDF update, so the book itself is not re-encoded. Encrypted or damaged
+  PDFs go up unchanged (the toast says so), and links a page already has are kept. Switch it off in Settings; the library menu has
+  "Add tap squares (as a copy)" for documents that are already on the reader, which leaves the original (and the pen notes on it) alone.
 
 **Dashboards**
 - Pages of widgets on a snap grid: text, clock, month calendar, checklist, countdown, image, computer status, reader status,

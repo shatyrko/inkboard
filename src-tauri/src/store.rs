@@ -23,11 +23,13 @@ pub struct AppSettings {
     /// where dashboards are uploaded on the reader
     pub dashboard_folder: String,
     pub display_after_push: bool,
+    /// PDFs uploaded to the Digital Paper get tap squares in the bottom corners (see tapzones.rs)
+    pub tap_squares: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
-        Self { allow_commands: false, dashboard_folder: "Document/Dashboards".into(), display_after_push: true }
+        Self { allow_commands: false, dashboard_folder: "Document/Dashboards".into(), display_after_push: true, tap_squares: true }
     }
 }
 
@@ -116,6 +118,7 @@ mod tests {
     fn settings_default_and_partial_files() {
         let d = tempdir();
         assert!(!load_settings(&d).allow_commands);
+        assert!(load_settings(&d).tap_squares, "on unless switched off, also for settings files written before it existed");
         fs::write(d.join("settings.json"), r#"{"allowCommands": true}"#).unwrap();
         let s = load_settings(&d);
         assert!(s.allow_commands);

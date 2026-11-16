@@ -16,6 +16,7 @@ mod settings;
 mod state;
 mod stats;
 mod store;
+mod tapzones;
 mod util;
 
 use std::sync::Arc;
@@ -65,6 +66,7 @@ fn main() {
             conn::wifi_set_enabled,
             library::library_list,
             library::library_upload,
+            library::library_add_tap_squares,
             library::library_download,
             library::library_delete,
             library::library_new_folder,
