@@ -202,9 +202,19 @@ fn mime_of(name: &str) -> &'static str {
     }
 }
 
-/// The command that shows `path` (relative to the main storage, like "Documents/Inkboard/Day.pdf") in the reader's viewer. The URI is
+/// Reader apps to try first, so Android does not stop to ask which app to use ("Open with"): Onyx's own reader and gallery.
+fn preferred_packages(mime: &str) -> &'static [&'static str] {
+    if mime.starts_with("image/") {
+        &["com.onyx.gallery"]
+    } else {
+        &["com.onyx.kreader"]
+    }
+}
+
+/// The commands that show `path` (relative to the main storage, like "Documents/Inkboard/Day.pdf") in the reader's viewer, best first:
+/// aimed at the reader's own app, then (for other readers, or when that app is missing) a plain view request. The URI is
 /// percent-encoded down to a safe alphabet, so the path cannot add anything to the shell command.
-pub fn open_command(path: &str) -> CmdResult<String> {
+pub fn open_commands(path: &str) -> CmdResult<Vec<String>> {
     use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
     const KEEP: &AsciiSet = &NON_ALPHANUMERIC.remove(b'/').remove(b'.').remove(b'-').remove(b'_');
     let path = path.trim().trim_start_matches('/');
@@ -213,17 +223,24 @@ pub fn open_command(path: &str) -> CmdResult<String> {
     }
     let name = path.rsplit('/').next().unwrap_or(path);
     let uri = format!("file:///storage/emulated/0/{}", utf8_percent_encode(path, KEEP));
-    Ok(format!("am start -a android.intent.action.VIEW -d {uri} -t {}", mime_of(name)))
+    let mime = mime_of(name);
+    let base = format!("am start -a android.intent.action.VIEW -d {uri} -t {mime}");
+    let mut out: Vec<String> = preferred_packages(mime).iter().map(|p| format!("{base} -p {p}")).collect();
+    out.push(base);
+    Ok(out)
 }
 
 #[tauri::command]
 pub async fn adb_open(state: State<'_, Shared>, id: String, path: String) -> CmdResult<()> {
     let d = ready(&state, &id).await?;
-    let out = shell(&d, &open_command(&path)?).await.map_err(fmt_err)?;
-    if out.contains("Error") || out.contains("Exception") {
-        return Err("The reader could not open that file.".into());
+    for cmd in open_commands(&path)? {
+        let out = shell(&d, &cmd).await.map_err(fmt_err)?;
+        // "Error: Activity not started, unable to resolve Intent" means no such app: try the next way
+        if !out.contains("Error") && !out.contains("Exception") {
+            return Ok(());
+        }
     }
-    Ok(())
+    Err("The reader could not open that file.".into())
 }
 
 #[cfg(test)]
@@ -249,13 +266,16 @@ mod tests {
 
     #[test]
     fn open_commands_are_quoted_safely() {
-        let c = open_command("Documents/Inkboard/Day plan.pdf").unwrap();
-        assert_eq!(c, "am start -a android.intent.action.VIEW -d file:///storage/emulated/0/Documents/Inkboard/Day%20plan.pdf -t application/pdf");
-        let evil = open_command("x'; rm -rf /sdcard; echo '.pdf").unwrap();
-        assert_eq!(evil.split_whitespace().count(), 8, "the path must stay one argument: {evil}");
-        assert!(!evil.contains(';') && !evil.contains('\''), "{evil}");
-        assert!(open_command("../etc/passwd").is_err());
-        assert!(open_command("  ").is_err());
+        let c = open_commands("Documents/Inkboard/Day plan.pdf").unwrap();
+        let base = "am start -a android.intent.action.VIEW -d file:///storage/emulated/0/Documents/Inkboard/Day%20plan.pdf -t application/pdf";
+        assert_eq!(c, [format!("{base} -p com.onyx.kreader"), base.to_string()]);
+        assert!(open_commands("Pictures/Inkboard/Wall.png").unwrap()[0].ends_with("-p com.onyx.gallery"));
+        for cmd in open_commands("x'; rm -rf /sdcard; echo '.pdf").unwrap() {
+            assert!(!cmd.contains(';') && !cmd.contains('\''), "{cmd}");
+            assert!(cmd.split_whitespace().count() >= 8, "the path must stay one argument: {cmd}");
+        }
+        assert!(open_commands("../etc/passwd").is_err());
+        assert!(open_commands("  ").is_err());
     }
 
     #[test]

@@ -101,6 +101,13 @@ fn main() {
             settings::settings_get,
             settings::settings_set,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Inkboard");
+        .build(tauri::generate_context!())
+        .expect("error while building Inkboard")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                if let Some(state) = app.try_state::<Arc<state::AppState>>() {
+                    tauri::async_runtime::block_on(state.mtp.close_all());
+                }
+            }
+        });
 }

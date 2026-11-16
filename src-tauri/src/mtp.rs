@@ -36,6 +36,16 @@ impl MtpHub {
     pub async fn forget(&self, id: &str) {
         self.devices.lock().await.remove(id);
     }
+
+    /// Ends every open session politely, so the next program (or the next start of this one) finds the reader idle.
+    pub async fn close_all(&self) {
+        let open: Vec<Arc<MtpDevice>> = self.devices.lock().await.drain().map(|(_, d)| d).collect();
+        for d in open {
+            if let Ok(d) = Arc::try_unwrap(d) {
+                let _ = d.close().await;
+            }
+        }
+    }
 }
 
 fn fnv1a(s: &str) -> u32 {
@@ -86,9 +96,24 @@ async fn device(hub: &MtpHub, id: &str) -> CmdResult<Arc<MtpDevice>> {
         return Ok(d.clone());
     }
     let info = find_info(id).await?;
-    let opened = match &info.serial_number {
-        Some(serial) => MtpDevice::open_by_serial(serial).await,
-        None => MtpDevice::open_by_location(info.location_id).await,
+    let open = || async {
+        match &info.serial_number {
+            Some(serial) => MtpDevice::open_by_serial(serial).await,
+            None => MtpDevice::open_by_location(info.location_id).await,
+        }
+    };
+    let opened = match open().await {
+        // A program that died while holding the reader leaves its session open, and the next open times out. Resetting the USB
+        // interface clears it (libmtp does the same), after a pause so the reader can settle.
+        Err(mtp_rs::Error::Timeout) => {
+            let _ = match &info.serial_number {
+                Some(serial) => MtpDevice::reset_by_serial(serial).await,
+                None => MtpDevice::reset_by_location(info.location_id).await,
+            };
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+            open().await
+        }
+        other => other,
     }
     .map_err(|e| match e {
         mtp_rs::Error::Timeout | mtp_rs::Error::Disconnected => {
