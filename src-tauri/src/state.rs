@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use dpt_client::{Client, PairingSession};
 use sysinfo::System;
 
+use crate::mtp::MtpHub;
 use crate::util::CmdResult;
 
 pub struct AppState {
@@ -13,13 +14,15 @@ pub struct AppState {
     /// a pairing that has asked the reader for a PIN and waits for the user to type it
     pub pairing: Mutex<Option<(String, PairingSession)>>,
     pub sys: Mutex<System>,
+    /// USB readers (MTP) that are open
+    pub mtp: MtpHub,
 }
 
 pub type Shared = Arc<AppState>;
 
 impl AppState {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, client: Mutex::new(None), pairing: Mutex::new(None), sys: Mutex::new(System::new().expect("system information is unavailable")) }
+        Self { dir, client: Mutex::new(None), pairing: Mutex::new(None), sys: Mutex::new(System::new().expect("system information is unavailable")), mtp: MtpHub::default() }
     }
 
     /// The signed-in client, or an error the UI can show next to a Connect button.

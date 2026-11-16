@@ -6,6 +6,23 @@ use std::time::{Duration, Instant};
 
 pub type CmdResult<T> = Result<T, String>;
 
+/// One file of an upload batch.
+#[derive(serde::Serialize)]
+pub struct UploadResult {
+    name: String,
+    ok: bool,
+    error: Option<String>,
+}
+
+impl UploadResult {
+    pub fn ok(name: String) -> Self {
+        Self { name, ok: true, error: None }
+    }
+    pub fn failed(name: String, error: String) -> Self {
+        Self { name, ok: false, error: Some(error) }
+    }
+}
+
 pub fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }

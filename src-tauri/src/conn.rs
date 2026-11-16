@@ -106,8 +106,10 @@ pub async fn import_legacy_credentials(state: State<'_, Shared>, addr: String) -
 fn sign_in(st: &AppState, addr: &str, creds: &Credentials) -> CmdResult<()> {
     let client = Client::new(Config::new(addr));
     client.authenticate(creds).map_err(err)?;
-    let serial = client.probe().ok().map(|p| p.serial);
-    store::save_device(&st.dir, &DeviceRecord { addr: addr.to_string(), serial }).map_err(err)?;
+    let probe = client.probe().ok();
+    let serial = probe.as_ref().map(|p| p.serial.clone());
+    let model = probe.map(|p| p.model).filter(|m| !m.is_empty());
+    store::save_device(&st.dir, &DeviceRecord { addr: addr.to_string(), serial, model }).map_err(err)?;
     *st.client.lock().unwrap() = Some(std::sync::Arc::new(client));
     Ok(())
 }

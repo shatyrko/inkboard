@@ -10,7 +10,9 @@ use serde_json::{json, Value};
 use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
 
+use crate::mtp::{self, Target};
 use crate::pdf::{self, PageSpec};
+use crate::pngout;
 use crate::state::Shared;
 use crate::stats::{self, SystemStats};
 use crate::store::{self, valid_id};
@@ -153,6 +155,9 @@ struct PublishMeta {
     folder: String,
     display: bool,
     pages: Vec<PageSpec>,
+    /// where to publish; absent means the paired Digital Paper
+    #[serde(default)]
+    target: Option<Target>,
 }
 
 #[derive(Serialize)]
@@ -190,6 +195,9 @@ fn file_stem(name: &str) -> String {
 #[tauri::command]
 pub async fn dashboard_publish(state: State<'_, Shared>, request: Request<'_>) -> CmdResult<PublishResult> {
     let (meta, pixels) = parse(&request)?;
+    if let Some(Target::Mtp { reader_id, folder, format }) = meta.target.clone() {
+        return publish_to_usb_reader(state.inner().as_ref(), &meta, &pixels, &reader_id, &folder, &format).await;
+    }
     let c = state.client()?;
     let settings = store::load_settings(&state.dir);
     blocking(move || {
@@ -204,6 +212,37 @@ pub async fn dashboard_publish(state: State<'_, Shared>, request: Request<'_>) -
         Ok(PublishResult { path: format!("{folder}/{name}"), entry_id: id, pages: meta.pages.len(), bytes: len })
     })
     .await?
+}
+
+/// Saves the dashboard as one PDF, or one PNG per page, in a folder on a USB reader's storage.
+async fn publish_to_usb_reader(state: &crate::state::AppState, meta: &PublishMeta, pixels: &[u8], reader_id: &str, folder: &str, format: &str) -> CmdResult<PublishResult> {
+    let stem = file_stem(&meta.name);
+    let files: Vec<(String, Vec<u8>)> = match format {
+        "pdf" => vec![(format!("{stem}.pdf"), pdf::build(&meta.name, &meta.pages, pixels)?)],
+        "png" => {
+            let single = meta.pages.len() == 1;
+            let expected: usize = meta.pages.iter().map(|p| p.width as usize * p.height as usize).sum();
+            if expected != pixels.len() {
+                return Err(format!("page sizes add up to {expected} bytes but {} arrived", pixels.len()));
+            }
+            let mut offset = 0;
+            let mut out = Vec::new();
+            for (i, p) in meta.pages.iter().enumerate() {
+                let len = p.width as usize * p.height as usize;
+                let name = if single { format!("{stem}.png") } else { format!("{stem} - {}.png", i + 1) };
+                out.push((name, pngout::encode_gray(p.width, p.height, &pixels[offset..offset + len])?));
+                offset += len;
+            }
+            out
+        }
+        other => return Err(format!("unknown format: {other}")),
+    };
+    let bytes = files.iter().map(|(_, d)| d.len()).sum();
+    let first = files.first().map(|(n, _)| n.clone()).unwrap_or_default();
+    let many = files.len() > 1;
+    let folder = if folder.trim().is_empty() { mtp::default_folder(format).to_string() } else { folder.trim().to_string() };
+    let used = mtp::put_files(state, reader_id, &folder, files).await?;
+    Ok(PublishResult { path: if many { used } else { format!("{used}/{first}") }, entry_id: String::new(), pages: meta.pages.len(), bytes })
 }
 
 #[tauri::command]

@@ -35,6 +35,9 @@ impl Default for AppSettings {
 pub struct DeviceRecord {
     pub addr: String,
     pub serial: Option<String>,
+    /// e.g. "DPT-RP1", for the reader list
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// Writes through a temporary file so a crash never leaves half a file behind.

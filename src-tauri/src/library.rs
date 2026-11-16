@@ -8,10 +8,10 @@ use std::time::{Duration, Instant};
 
 use dpt_client::{Client, Entry, Template};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Runtime, State};
 
 use crate::state::Shared;
-use crate::util::{blocking, err, CmdResult};
+use crate::util::{blocking, err, CmdResult, UploadResult};
 
 static TRANSFER_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -28,17 +28,17 @@ pub struct TransferProgress {
 }
 
 /// Emits `transfer-progress` events, at most about ten a second.
-struct Progress<'a> {
-    app: &'a AppHandle,
+pub(crate) struct Progress<'a, R: Runtime> {
+    app: &'a AppHandle<R>,
     id: String,
     name: String,
     direction: &'static str,
-    total: u64,
+    pub(crate) total: u64,
     last: Instant,
 }
 
-impl<'a> Progress<'a> {
-    fn new(app: &'a AppHandle, name: &str, direction: &'static str, total: u64) -> Self {
+impl<'a, R: Runtime> Progress<'a, R> {
+    pub(crate) fn new(app: &'a AppHandle<R>, name: &str, direction: &'static str, total: u64) -> Self {
         let id = format!("{direction}-{}", TRANSFER_COUNTER.fetch_add(1, Ordering::Relaxed));
         let p = Progress { app, id, name: name.to_string(), direction, total, last: Instant::now() - Duration::from_secs(1) };
         p.emit(0, false, None);
@@ -50,13 +50,13 @@ impl<'a> Progress<'a> {
             TransferProgress { id: self.id.clone(), name: self.name.clone(), direction: self.direction, sent, total: self.total, done, error },
         );
     }
-    fn tick(&mut self, sent: u64) {
+    pub(crate) fn tick(&mut self, sent: u64) {
         if self.last.elapsed() >= Duration::from_millis(100) {
             self.last = Instant::now();
             self.emit(sent, false, None);
         }
     }
-    fn finish(&self, result: &Result<(), String>) {
+    pub(crate) fn finish(&self, result: &Result<(), String>) {
         match result {
             Ok(()) => self.emit(self.total, true, None),
             Err(e) => self.emit(0, true, Some(e.clone())),
@@ -68,13 +68,6 @@ impl<'a> Progress<'a> {
 pub async fn library_list(state: State<'_, Shared>) -> CmdResult<Vec<Entry>> {
     let c = state.client()?;
     blocking(move || c.list_entries().map_err(err)).await?
-}
-
-#[derive(Serialize)]
-pub struct UploadResult {
-    name: String,
-    ok: bool,
-    error: Option<String>,
 }
 
 fn is_pdf(path: &Path) -> bool {
@@ -105,8 +98,8 @@ pub async fn library_upload(app: AppHandle, state: State<'_, Shared>, paths: Vec
                 let path = PathBuf::from(p);
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.clone());
                 match upload_one(&c, &app, &path, &folder) {
-                    Ok(()) => UploadResult { name, ok: true, error: None },
-                    Err(e) => UploadResult { name, ok: false, error: Some(e) },
+                    Ok(()) => UploadResult::ok(name),
+                    Err(e) => UploadResult::failed(name, e),
                 }
             })
             .collect()

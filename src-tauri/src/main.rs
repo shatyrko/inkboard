@@ -8,7 +8,9 @@ mod dashboards;
 #[cfg(test)]
 mod ipc_tests;
 mod library;
+mod mtp;
 mod pdf;
+mod pngout;
 mod settings;
 mod state;
 mod stats;
@@ -81,6 +83,15 @@ fn main() {
             dashboards::read_image,
             dashboards::dashboard_publish,
             dashboards::dashboard_export_pdf,
+            mtp::readers_list,
+            mtp::mtp_status,
+            mtp::mtp_list,
+            mtp::mtp_upload,
+            mtp::mtp_download,
+            mtp::mtp_delete,
+            mtp::mtp_new_folder,
+            mtp::mtp_rename,
+            mtp::mtp_move,
             settings::settings_get,
             settings::settings_set,
         ])
