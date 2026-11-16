@@ -2,7 +2,7 @@
 // so the UI can be developed and screenshotted without the desktop shell or a reader.
 import { inTauri } from './window';
 import type {
-  AppSettings, ConfigKey, ConnectionState, DashboardSummary, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, MtpEntry, MtpStatus, ProbeResult,
+  AdbStatus, AppSettings, ConfigKey, ConnectionState, DashboardSummary, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, MtpEntry, MtpStatus, ProbeResult,
   PublishMeta, PublishResult, Reader, SystemStats, TemplateEntry, TransferProgress, UploadResult, WifiConnectRequest, WifiNetwork, WifiScanResult,
 } from './types';
 
@@ -43,6 +43,17 @@ export const api = {
   mtpNewFolder: (id: string, storage: number, parent: number | null, name: string) => call<number>('mtp_new_folder', { id, storage, parent, name }),
   mtpRename: (id: string, storage: number, handle: number, name: string) => call<void>('mtp_rename', { id, storage, handle, name }),
   mtpMove: (id: string, storage: number, handle: number, parent: number | null) => call<void>('mtp_move', { id, storage, handle, parent }),
+
+  // USB debugging (ADB) on Android readers: opt-in, the reader asks the user to approve this computer the first time.
+  /** never prompts: 'ready' only when a connection is already open */
+  adbStatus: (id: string) => call<AdbStatus>('adb_status', { id }),
+  /** connects; the reader shows "Allow USB debugging?" and this waits up to 60 s for the tap */
+  adbConnect: (id: string) => call<AdbStatus>('adb_connect', { id }),
+  adbDisconnect: (id: string) => call<void>('adb_disconnect', { id }),
+  /** PNG data URL of the reader's screen right now (needs a ready connection) */
+  adbScreenshot: (id: string) => call<string>('adb_screenshot', { id }),
+  /** shows a file on the reader's screen; `path` is relative to the main storage, e.g. "Documents/Inkboard/Day.pdf" */
+  adbOpen: (id: string, path: string) => call<void>('adb_open', { id, path }),
 
   // status and settings of the Digital Paper
   deviceStatus: () => call<DeviceStatus>('device_status'),

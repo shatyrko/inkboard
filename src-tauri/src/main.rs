@@ -3,6 +3,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod adb;
 mod conn;
 mod dashboards;
 #[cfg(test)]
@@ -83,6 +84,11 @@ fn main() {
             dashboards::read_image,
             dashboards::dashboard_publish,
             dashboards::dashboard_export_pdf,
+            adb::adb_status,
+            adb::adb_connect,
+            adb::adb_disconnect,
+            adb::adb_screenshot,
+            adb::adb_open,
             mtp::readers_list,
             mtp::mtp_status,
             mtp::mtp_list,

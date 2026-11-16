@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use dpt_client::{Client, PairingSession};
 use sysinfo::System;
 
+use crate::adb::AdbHub;
 use crate::mtp::MtpHub;
 use crate::util::CmdResult;
 
@@ -16,13 +17,15 @@ pub struct AppState {
     pub sys: Mutex<System>,
     /// USB readers (MTP) that are open
     pub mtp: MtpHub,
+    /// USB debugging connections to Android readers
+    pub adb: AdbHub,
 }
 
 pub type Shared = Arc<AppState>;
 
 impl AppState {
     pub fn new(dir: PathBuf) -> Self {
-        Self { dir, client: Mutex::new(None), pairing: Mutex::new(None), sys: Mutex::new(System::new().expect("system information is unavailable")), mtp: MtpHub::default() }
+        Self { dir, client: Mutex::new(None), pairing: Mutex::new(None), sys: Mutex::new(System::new().expect("system information is unavailable")), mtp: MtpHub::default(), adb: AdbHub::default() }
     }
 
     /// The signed-in client, or an error the UI can show next to a Connect button.

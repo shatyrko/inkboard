@@ -26,3 +26,9 @@ export const capabilities = (kind: ReaderKind): Capabilities => TABLE[kind];
 export function readerTitle(r: Pick<Reader, 'maker' | 'name'>): string {
   return r.name.toLowerCase().startsWith(r.maker.toLowerCase()) ? r.name : `${r.maker} ${r.name}`.trim();
 }
+
+/** A USB reader gains screen mirroring and "open on the reader" once USB debugging (ADB) is connected. */
+export function capabilitiesWith(kind: ReaderKind, adbReady: boolean): Capabilities {
+  const base = TABLE[kind];
+  return kind === 'mtp' && adbReady ? { ...base, screenMirror: true, openOnReader: true } : base;
+}

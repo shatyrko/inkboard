@@ -166,3 +166,15 @@ export type PublishTarget =
   | { kind: 'mtp'; readerId: string; /** folder on the device storage; empty = default for the format */ folder: string; format: PublishFormat };
 /** 'pdf': one document. 'png': one picture per page. 'template': pictures saved where the reader's note app looks for pen templates (Boox: the noteTemplate folder), so the page can be written on with the pen. */
 export type PublishFormat = 'pdf' | 'png' | 'template';
+
+// ---------- USB debugging (ADB) on Android readers ----------
+/** 'unavailable': the reader offers no debugging connection (USB debugging is off on it). 'off': it does, but this computer is not connected. 'ready': connected and approved on the reader. */
+export type AdbState = 'unavailable' | 'off' | 'ready';
+export type AdbStatus = {
+  state: AdbState;
+  /** e.g. "13" */
+  android: string | null;
+  battery: { level: number; charging: boolean } | null;
+  /** the physical screen in pixels, e.g. 2400 x 3200 */
+  screen: { width: number; height: number } | null;
+};
