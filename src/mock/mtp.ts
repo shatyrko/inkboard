@@ -2,7 +2,12 @@
 // upload, rename, move, delete and new folder really change. Nothing here talks to a real device.
 // Which readers exist depends on ?mock= (see mock/device.ts): paired and mtp plug it in, unplugged knows it but leaves it
 // disconnected. setMtpPlugged() flips that at run time. The dashboard builder calls addMockFile.
-import type { MtpEntry, MtpStatus, Reader, UploadResult } from '../lib/types';
+// USB debugging (ADB): by default it is off on this side and connecting succeeds after a few seconds, as if the user tapped Allow;
+//   ?mock=adb     USB reader only, USB debugging already connected
+//   ?mock=noadb   USB reader only, USB debugging is off on the reader (connecting fails)
+// From the browser console: mockUsb.plug(), unplug(), adb('ready' | 'off' | 'unavailable'), denyNext() (the next connect is refused).
+import type { AdbState, AdbStatus, MtpEntry, MtpStatus, Reader, UploadResult } from '../lib/types';
+import { mockScreenshot } from './device-screen';
 import { mode } from './mode';
 import { simulateTransfer, sleep } from './transfer';
 
@@ -12,8 +17,10 @@ const TOTAL = 116_000_000_000;
 /** system, apps and media the mock does not list, so the storage meter is not empty */
 const BASE_USED = 31_400_000_000;
 
-let known = ['paired', 'mtp', 'unplugged'].includes(mode);
-let plugged = mode === 'paired' || mode === 'mtp';
+let known = ['paired', 'mtp', 'unplugged', 'adb', 'noadb'].includes(mode);
+let plugged = ['paired', 'mtp', 'adb', 'noadb'].includes(mode);
+let adbState: AdbState = mode === 'adb' ? 'ready' : mode === 'noadb' ? 'unavailable' : 'off';
+let deny = false;
 
 /** plugging in a reader that was not there at all makes it appear, as a real one does */
 export function setMtpPlugged(on: boolean): void {
@@ -26,8 +33,15 @@ export function usbReader(): Reader | null {
   return known ? { id: MTP_ID, kind: 'mtp', name: 'Tab X C', maker: 'ONYX', connected: plugged, link: 'usb' } : null;
 }
 
-// from the browser console: mockUsb.unplug() / mockUsb.plug()
-Object.assign(window, { mockUsb: { plug: () => setMtpPlugged(true), unplug: () => setMtpPlugged(false) } });
+// from the browser console, see the top of this file
+Object.assign(window, {
+  mockUsb: {
+    plug: () => setMtpPlugged(true),
+    unplug: () => setMtpPlugged(false),
+    adb: (state: AdbState) => { adbState = state; },
+    denyNext: () => { deny = true; },
+  },
+});
 
 type Node = MtpEntry & { parent: number | null };
 let handles = 1000;
@@ -125,6 +139,25 @@ function putFile(parent: number | null, name: string, bytes: number) {
 const fakeSize = (name: string) => 200_000 + [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9000, 7) * 1000;
 const strip = ({ handle, name, kind, size, modified }: Node): MtpEntry => ({ handle, name, kind, size, modified });
 
+function requireAdb(id: string) {
+  requireUsb(id);
+  if (adbState !== 'ready') throw 'USB debugging is not connected. Turn it on first.';
+}
+const adbStatus = (): AdbStatus => adbState === 'ready'
+  ? { state: 'ready', android: '13', battery: { level: 87, charging: false }, screen: { width: 1650, height: 2200 } }
+  : { state: adbState, android: null, battery: null, screen: null };
+/** the file or folder at a path relative to the storage root, or null */
+function atPath(path: string): Node | null {
+  let parent: number | null = null;
+  let found: Node | null = null;
+  for (const seg of path.split('/').filter(Boolean)) {
+    found = kids(parent).find((n) => n.name === seg) ?? null;
+    if (!found) return null;
+    parent = found.handle;
+  }
+  return found;
+}
+
 /** Puts a file into the mock USB reader's folder (creating folders), as publishing a dashboard to it would. */
 export function addMockFile(readerId: string, folderPath: string, name: string, bytes: number): void {
   requireUsb(readerId);
@@ -163,6 +196,33 @@ export const handlers: Record<string, (a: any) => unknown> = {
     const n = node(handle);
     if (n.kind === 'folder') throw 'Folders cannot be downloaded.';
     await simulateTransfer(n.name, 'down', n.size);
+  },
+  adb_status: async ({ id }: { id: string }): Promise<AdbStatus> => {
+    requireUsb(id);
+    await sleep(150);
+    return adbStatus();
+  },
+  adb_connect: async ({ id }: { id: string }): Promise<AdbStatus> => {
+    requireUsb(id);
+    if (adbState === 'unavailable') { await sleep(600); throw 'USB debugging is off on the reader. Turn it on in Settings > Developer options > USB debugging, then try again.'; }
+    await sleep(2500); // the user reads the prompt and taps Allow
+    if (deny) { deny = false; throw 'The reader did not approve this computer. Tap Allow when it asks "Allow USB debugging?", then try again.'; }
+    adbState = 'ready';
+    return adbStatus();
+  },
+  adb_disconnect: ({ id }: { id: string }) => {
+    requireUsb(id);
+    adbState = 'off';
+  },
+  adb_screenshot: async ({ id }: { id: string }): Promise<string> => {
+    requireAdb(id);
+    await sleep(400);
+    return mockScreenshot();
+  },
+  adb_open: async ({ id, path }: { id: string; path: string }) => {
+    requireAdb(id);
+    await sleep(300);
+    if (atPath(path)?.kind !== 'file') throw `There is no file "${path}" on the reader.`;
   },
   mtp_delete: ({ id, handle }: { id: string; handle: number }) => {
     requireUsb(id);

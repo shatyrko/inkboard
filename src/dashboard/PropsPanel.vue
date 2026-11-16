@@ -2,7 +2,8 @@
 // The right-hand sidebar: the selected widget's properties, or (with nothing selected) the page and dashboard settings.
 import { computed } from 'vue';
 import Icon from '../components/Icon.vue';
-import { capabilities } from '../lib/readers';
+import { adb, adbReady } from '../lib/adb';
+import { capabilities, capabilitiesWith } from '../lib/readers';
 import { app } from '../lib/store';
 import type { PublishFormat } from '../lib/types';
 import type { DataBag } from './data';
@@ -11,6 +12,7 @@ import FieldForm from './FieldForm.vue';
 import { clamp } from './grid';
 import { FORMAT_LABEL, defaultFolder, formatHint, retarget, targetOf, targetOptions, targetReaderId } from './publish-target';
 import { drawOrder, sourceOf } from './render';
+import { resolutionOptions } from './resolution';
 import { registry } from './widgets';
 
 const props = defineProps<{
@@ -32,6 +34,18 @@ const schedule = computed(() => doc.value?.schedule ?? { enabled: false, everyMi
 const target = computed(() => targetOf(doc.value));
 const readerOptions = computed(() => targetOptions(app.readers, target.value, { rememberedName: doc.value?.publish?.targetName, dptConnected: !!app.conn?.connected }));
 const formats = capabilities('mtp').dashboardFormats;
+
+/** USB debugging on the target reader decides whether the file can be opened for you */
+const usbReady = computed(() => target.value.kind === 'mtp' && adbReady(target.value.readerId));
+const canOpen = computed(() => {
+  const t = target.value;
+  return t.kind === 'mtp' && capabilitiesWith('mtp', adbReady(t.readerId)).openOnReader && t.format !== 'template';
+});
+/** the "Resolution" choices, offered when the reader's screen is known and has the page's shape */
+const resolutions = computed(() => {
+  const t = target.value;
+  return doc.value && t.kind === 'mtp' ? resolutionOptions(doc.value, adb[t.readerId]?.screen) : null;
+});
 
 function chooseReader(id: string) {
   props.ed.setPublish({ ...doc.value?.publish, ...retarget(id, app.readers, target.value) });
@@ -157,22 +171,28 @@ const peek = (w: NonNullable<typeof selected.value>) => {
             <input id="d-usb-folder" class="input selectable mono" :value="target.folder" :placeholder="defaultFolder(target.format)" spellcheck="false" autocomplete="off" @input="patchUsbTarget({ folder: ($event.target as HTMLInputElement).value })" />
             <div class="hint">Empty uses {{ defaultFolder(target.format) }}.</div>
           </div>
-          <p class="hint quiet">Open the file from the reader's own file app.</p>
+          <div v-if="resolutions" class="field">
+            <label for="d-res">Resolution</label>
+            <select id="d-res" class="select" :value="doc.publish?.resolution ?? 'native'" @change="ed.setPublish({ ...doc.publish, resolution: ($event.target as HTMLSelectElement).value as 'native' | 'standard' })">
+              <option v-for="o in resolutions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+            <div class="hint">Drawn at the reader's own size, so lines and text stay sharp.</div>
+          </div>
         </template>
 
-        <template v-else>
-          <div class="field">
-            <label for="d-folder">Folder on the reader</label>
-            <input id="d-folder" class="input selectable mono" :value="doc.publish?.folder ?? ''" :placeholder="defaults.folder" spellcheck="false" autocomplete="off" @input="ed.setPublish({ ...doc.publish, folder: ($event.target as HTMLInputElement).value })" />
-            <div class="hint">Empty uses the folder from Settings.</div>
+        <div v-else class="field">
+          <label for="d-folder">Folder on the reader</label>
+          <input id="d-folder" class="input selectable mono" :value="doc.publish?.folder ?? ''" :placeholder="defaults.folder" spellcheck="false" autocomplete="off" @input="ed.setPublish({ ...doc.publish, folder: ($event.target as HTMLInputElement).value })" />
+          <div class="hint">Empty uses the folder from Settings.</div>
+        </div>
+
+        <div v-if="target.kind === 'dpt' || canOpen" class="field">
+          <div class="row">
+            <label for="d-display" class="grow sw-label">Open on the reader after pushing</label>
+            <button id="d-display" class="switch" role="switch" :aria-checked="doc.publish?.display ?? defaults.display" aria-label="Open on the reader after pushing" @click="ed.setPublish({ ...doc.publish, display: !(doc.publish?.display ?? defaults.display) })"></button>
           </div>
-          <div class="field">
-            <div class="row">
-              <label for="d-display" class="grow sw-label">Open on the reader after pushing</label>
-              <button id="d-display" class="switch" role="switch" :aria-checked="doc.publish?.display ?? defaults.display" aria-label="Open on the reader after pushing" @click="ed.setPublish({ ...doc.publish, display: !(doc.publish?.display ?? defaults.display) })"></button>
-            </div>
-          </div>
-        </template>
+        </div>
+        <p v-else-if="!usbReady" class="hint quiet">Open the file from the reader's own file app.</p>
         <div class="field">
           <div class="row">
             <label for="d-auto" class="grow sw-label">Push automatically</label>

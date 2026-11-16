@@ -23,3 +23,6 @@ export function usage(total: number, free: number): Usage {
   const used = Math.max(0, total - free);
   return { used, pct: total > 0 ? Math.min(100, (used / total) * 100) : 0 };
 }
+
+/** the reader is asked to open files by a path inside its main storage, so only the first storage can offer it */
+export const isMainStorage = (storages: readonly { id: number }[], storageId: number | null): boolean => storageId !== null && storages[0]?.id === storageId;

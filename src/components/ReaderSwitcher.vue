@@ -3,8 +3,10 @@
 // known reader, the active one checked, and the way to add a Digital Paper. Ctrl+` cycles (handled in App.vue).
 import { computed, ref } from 'vue';
 import type { MenuItem } from '../lib/contextmenu';
+import { adb, adbReady } from '../lib/adb';
 import { activeReader, app, selectReader } from '../lib/store';
 import { readerStatus } from '../lib/readerList';
+import { batteryLine } from '../views/device/adbCard';
 import { readerTitle } from '../lib/readers';
 import Icon from './Icon.vue';
 
@@ -13,6 +15,8 @@ const emit = defineEmits<{ add: [] }>();
 const button = ref<HTMLElement | null>(null);
 const active = computed(() => activeReader());
 const status = computed(() => (active.value ? readerStatus(active.value, app.connecting) : ''));
+// a USB reader with USB debugging connected tells its battery
+const battery = computed(() => (active.value && active.value.connected && adbReady(active.value.id) ? adb[active.value.id]?.battery ?? null : null));
 const hasDpt = computed(() => app.readers.some((r) => r.kind === 'digital-paper'));
 const glyph = (link: 'wifi' | 'usb') => (link === 'usb' ? 'usb' : 'wifi');
 
@@ -52,7 +56,7 @@ function open() {
     <span class="glyph"><Icon :name="glyph(active.link)" :size="16" /></span>
     <span class="txt">
       <b>{{ readerTitle(active) }}</b>
-      <span class="st"><i class="dot" :class="active.connected ? 'ok' : app.connecting && active.id === 'dpt' ? '' : 'bad'"></i>{{ status }}</span>
+      <span class="st"><i class="dot" :class="active.connected ? 'ok' : app.connecting && active.id === 'dpt' ? '' : 'bad'"></i>{{ status }}<span v-if="battery" class="bat num" :title="`Battery ${batteryLine(battery)}`">{{ Math.round(battery.level) }}%</span></span>
     </span>
     <Icon name="chevrons-updown" :size="15" class="chev" />
   </button>
@@ -65,6 +69,8 @@ function open() {
 .rs.off .glyph { background: var(--hover); color: var(--faint); }
 .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
 .txt b { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the battery sits on the status line, which has room; beside the name it would cut the name short */
+.bat { margin-left: auto; flex: none; padding-left: 8px; }
 .st { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .st .dot { width: 7px; height: 7px; }
 .chev { flex: none; color: var(--faint); }

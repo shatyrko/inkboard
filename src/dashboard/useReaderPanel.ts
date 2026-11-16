@@ -1,12 +1,13 @@
 // Glue between the editor and the Reader panel: whether it is on (remembered), where it sits for the current window width,
 // and when the live preview may poll (reader-preview.ts holds the policy itself).
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type Ref } from 'vue';
-import { capabilities } from '../lib/readers';
+import { adbReady } from '../lib/adb';
+import { capabilitiesWith } from '../lib/readers';
 import { app } from '../lib/store';
 import type { PublishTarget } from '../lib/types';
 import { notify } from '../lib/ui';
 import { background } from './background';
-import { isTargetReachable, kindOfTarget } from './publish-target';
+import { MIRROR_NEEDS_DEBUGGING, isTargetReachable, kindOfTarget, targetReaderId } from './publish-target';
 import { captureReaderScreen, createReaderPreview } from './reader-preview';
 
 const KEY = 'inkboard.dashboard.reader';
@@ -28,19 +29,22 @@ export function useReaderPanel({ hasDoc, selectedId, target }: { hasDoc: Ref<boo
   const shown = computed(() => hasDoc.value && on.value && (wide.value || side.value === 'reader'));
 
   const preview = createReaderPreview({
-    capture: captureReaderScreen,
+    capture: () => captureReaderScreen(target.value),
     onFailureStreak: (message) => notify(`Could not read the reader's screen: ${message}`, 'error'),
   });
 
-  /** only the Digital Paper can be mirrored; for a USB reader the panel explains that and nothing is polled */
-  const available = computed(() => capabilities(kindOfTarget(target.value)).screenMirror);
+  /** the Digital Paper can always be mirrored; a USB reader once its debugging connection is open */
+  const available = computed(() => capabilitiesWith(kindOfTarget(target.value), adbReady(targetReaderId(target.value))).screenMirror);
 
   const viewActive = ref(false);
   const windowVisible = ref(document.visibilityState === 'visible');
-  const connected = computed(() => isTargetReachable({ kind: 'dpt' }, app.readers, !!app.conn?.connected));
+  /** the reader being mirrored is the one the dashboard is published to */
+  const connected = computed(() => isTargetReachable(target.value, app.readers, !!app.conn?.connected));
   watch([shown, available, viewActive, windowVisible, connected], ([panelShown, canMirror, active, visible, online]) => {
     preview.update({ panelVisible: panelShown && canMirror, viewActive: active, windowVisible: visible, connected: online });
   }, { immediate: true });
+  // another reader means another picture
+  watch(() => targetReaderId(target.value), () => preview.reset());
 
   // a push of any dashboard may have changed what the reader shows
   watch(background.lastPush, () => preview.afterPush());
@@ -62,13 +66,15 @@ export function useReaderPanel({ hasDoc, selectedId, target }: { hasDoc: Ref<boo
 
   const bind = computed(() => ({
     available: available.value,
+    info: MIRROR_NEEDS_DEBUGGING,
+    canReconnect: target.value.kind === 'dpt',
     image: preview.image.value,
     updatedAt: preview.updatedAt.value,
     loading: preview.loading.value,
     error: preview.error.value,
     connected: connected.value,
     connecting: app.connecting,
-    reason: app.connectError,
+    reason: target.value.kind === 'dpt' ? app.connectError : 'Plug the reader in with its USB cable.',
   }));
 
   let observer: ResizeObserver | undefined;

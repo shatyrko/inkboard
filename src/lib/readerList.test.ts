@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { app, activeReader } from './store';
-import { cycleReader, dptStateDiffers, readerStatus } from './readerList';
+import { adbWork, cycleReader, dptStateDiffers, readerStatus } from './readerList';
 import { readerTitle } from './readers';
 import type { ConnectionState, Reader } from './types';
 
@@ -69,5 +69,23 @@ describe('readerTitle', () => {
     expect(readerTitle(dpt)).toBe('Sony DPT-RP1');
     expect(readerTitle(usb)).toBe('ONYX Tab X C');
     expect(readerTitle({ maker: 'Sony', name: 'Sony DPT-CP1' })).toBe('Sony DPT-CP1');
+  });
+});
+
+describe('adbWork', () => {
+  const gone: Reader = { ...usb, id: 'mtp:gone', connected: false };
+  it('refreshes ready USB readers every third tick', () => {
+    const ready = (id: string) => id === 'mtp:abc';
+    expect(adbWork([dpt, usb], ready, 3).refresh).toEqual(['mtp:abc']);
+    expect(adbWork([dpt, usb], ready, 1).refresh).toEqual([]);
+    expect(adbWork([dpt, usb], ready, 2).refresh).toEqual([]);
+  });
+  it('leaves readers that are not ready, not connected, or not USB alone', () => {
+    expect(adbWork([dpt, usb, gone], () => false, 3).refresh).toEqual([]);
+    expect(adbWork([gone], () => true, 3).refresh).toEqual([]);
+    expect(adbWork([dpt], () => true, 3).refresh).toEqual([]);
+  });
+  it('forgets USB readers that are no longer connected', () => {
+    expect(adbWork([dpt, usb, gone], () => true, 1).forget).toEqual(['mtp:gone']);
   });
 });

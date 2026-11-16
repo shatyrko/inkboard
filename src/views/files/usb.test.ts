@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { speedAdvice, usage } from './usb';
+import { isMainStorage, speedAdvice, usage } from './usb';
 
 describe('speedAdvice', () => {
   it('is happy with SuperSpeed and above', () => {
@@ -29,5 +29,15 @@ describe('usage', () => {
   it('copes with an empty or odd storage', () => {
     expect(usage(0, 0)).toEqual({ used: 0, pct: 0 });
     expect(usage(100, 150)).toEqual({ used: 0, pct: 0 });
+  });
+});
+
+describe('isMainStorage', () => {
+  it('is true only for the first storage', () => {
+    const storages = [{ id: 65537 }, { id: 65538 }];
+    expect(isMainStorage(storages, 65537)).toBe(true);
+    expect(isMainStorage(storages, 65538)).toBe(false);
+    expect(isMainStorage(storages, null)).toBe(false);
+    expect(isMainStorage([], 1)).toBe(false);
   });
 });

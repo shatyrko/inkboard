@@ -3,6 +3,7 @@
 // again shortly after a push (the reader needs a moment to draw) and complains once per failing streak.
 import { ref } from 'vue';
 import { api } from '../lib/api';
+import type { PublishTarget } from '../lib/types';
 
 export const POLL_MS = 5_000;
 /** how long after a push the second refresh comes: the reader takes a moment to draw the new page */
@@ -116,12 +117,24 @@ export function createReaderPreview(deps: PreviewDeps) {
     }, deps.settleMs ?? SETTLE_MS);
   }
 
-  return { image, updatedAt, loading, error, update, refresh, afterPush, dispose: stop };
+  /** the picture now comes from another reader: forget the old one and look again if anyone is watching */
+  function reset() {
+    image.value = null;
+    updatedAt.value = null;
+    error.value = '';
+    failures = 0;
+    refresh();
+  }
+
+  return { image, updatedAt, loading, error, update, refresh, afterPush, reset, dispose: stop };
 }
 
-/** The real capture: the screenshot is decoded before it is handed over, so swapping it in never flickers. */
-export async function captureReaderScreen(): Promise<string> {
-  const url = await api.screenshot();
+/**
+ * The real capture, from the reader the dashboard is published to: the Digital Paper over Wi-Fi, a USB reader over its
+ * debugging connection. The screenshot is decoded before it is handed over, so swapping it in never flickers.
+ */
+export async function captureReaderScreen(target: PublishTarget): Promise<string> {
+  const url = target.kind === 'mtp' ? await api.adbScreenshot(target.readerId) : await api.screenshot();
   const img = new Image();
   img.src = url;
   // a window that is not being drawn may never finish decoding: wait a moment at most

@@ -10,7 +10,7 @@ import { fileName, listNames, pickAnyFiles } from '../shared/files';
 import { plural } from '../shared/text';
 import { deleteBody, deleteTitle } from './deletion';
 import { sameNames } from './listing';
-import { currentHandle, folderPath, type Crumb } from './nav';
+import { currentHandle, folderPath, storageRelativePath, type Crumb } from './nav';
 
 export type MoveTarget = { parent: number | null; name: string; existing: MtpEntry[] };
 
@@ -33,6 +33,12 @@ export function createActions(env: ActionEnv) {
   const id = () => env.readerId();
   const storage = () => env.storage();
   const here = () => currentHandle(env.stack());
+
+  /** shows a file of the folder being looked at on the reader's screen (needs USB debugging; the path is relative to the main storage) */
+  async function openOnReader(e: MtpEntry) {
+    const path = storageRelativePath(env.stack(), e.name);
+    if (await run(() => api.adbOpen(id(), path), `Could not open "${e.name}" on the reader`)) notify(`Opened "${e.name}" on the reader`);
+  }
 
   /** returns the new folder's handle so the caller can select it */
   async function newFolder(): Promise<number | null> {
@@ -135,5 +141,5 @@ export function createActions(env: ActionEnv) {
     if (paths?.length) await upload(paths);
   }
 
-  return { newFolder, rename, remove, move, download, upload, uploadFromPicker };
+  return { openOnReader, newFolder, rename, remove, move, download, upload, uploadFromPicker };
 }

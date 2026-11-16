@@ -50,6 +50,8 @@ export type PublishOptions = {
   target?: PublishTarget;
   /** the reader's name when the target was chosen, so a reader that is unplugged now can still be named */
   targetName?: string;
+  /** pictures for a USB reader: its own screen size ('native', the default) or the standard page size */
+  resolution?: 'native' | 'standard';
 };
 export type Dashboard = {
   version: 1;
@@ -151,6 +153,7 @@ export function migrateDashboard(raw: unknown, fallbackId = newId()): Dashboard 
   if (typeof pub.folder === 'string' && pub.folder.trim()) p.folder = pub.folder.trim();
   if (typeof pub.display === 'boolean') p.display = pub.display;
   if (typeof pub.targetName === 'string' && pub.targetName.trim()) p.targetName = pub.targetName.trim();
+  if (pub.resolution === 'native' || pub.resolution === 'standard') p.resolution = pub.resolution;
   d.publish = p;
   return d;
 }

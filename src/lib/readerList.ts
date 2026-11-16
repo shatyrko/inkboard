@@ -23,3 +23,18 @@ export function dptStateDiffers(readers: readonly Reader[], conn: ConnectionStat
   const dpt = readers.find((r) => r.id === 'dpt');
   return !!dpt && !!conn && dpt.connected !== conn.connected;
 }
+
+/** every Nth watch tick (4 s each, so about every 12 s) a connected USB reader that has USB debugging on gets its status read again */
+const ADB_EVERY_TICKS = 3;
+
+/**
+ * What the readers watch does for USB debugging each tick: re-read the status of readers that are ready (battery, and noticing that the
+ * connection dropped), and forget what was known about readers that are gone, so a replug starts from a fresh status.
+ */
+export function adbWork(readers: readonly Reader[], isReady: (id: string) => boolean, tick: number): { refresh: string[]; forget: string[] } {
+  const usb = readers.filter((r) => r.kind === 'mtp');
+  return {
+    refresh: tick % ADB_EVERY_TICKS === 0 ? usb.filter((r) => r.connected && isReady(r.id)).map((r) => r.id) : [],
+    forget: usb.filter((r) => !r.connected).map((r) => r.id),
+  };
+}

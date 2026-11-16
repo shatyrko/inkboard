@@ -1,18 +1,23 @@
 <script setup lang="ts">
-// A USB reader at a glance: storage, who made it, how fast the cable is, and what Inkboard can and cannot do with it.
-import { computed, onActivated, onDeactivated, ref, watch } from 'vue';
+// A USB reader at a glance: storage, who made it, how fast the cable is, USB debugging (opt-in, adds a live screen), and what
+// Inkboard can and cannot do with it.
+import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from 'vue';
 import Icon from '../../components/Icon.vue';
 import PageBar from '../../components/PageBar.vue';
 import UsbOffline from '../../components/UsbOffline.vue';
 import { api } from '../../lib/api';
 import type { MenuItem } from '../../lib/contextmenu';
 import { fmtBytes } from '../../lib/format';
-import { capabilities } from '../../lib/readers';
+import { adb, adbConnecting, adbReady, refreshAdb } from '../../lib/adb';
+import { capabilitiesWith } from '../../lib/readers';
 import { activeReader } from '../../lib/store';
 import type { MtpStatus } from '../../lib/types';
 import { speedAdvice, usage } from '../files/usb';
 import { copyText } from '../shared/clipboard';
 import { useDelayed } from '../shared/delayed';
+import AdbCard from './AdbCard.vue';
+import { shouldPollAdb } from './policy';
+import ScreenPanel from './ScreenPanel.vue';
 
 const status = ref<MtpStatus | null>(null);
 const loading = ref(false);
@@ -22,7 +27,8 @@ const visible = ref(false);
 const reader = computed(() => activeReader());
 const online = computed(() => !!reader.value?.connected);
 const slow = useDelayed(loading);
-const caps = capabilities('mtp');
+const ready = computed(() => adbReady(reader.value?.id));
+const caps = computed(() => capabilitiesWith('mtp', ready.value));
 const advice = computed(() => speedAdvice(status.value?.usbSpeed ?? null));
 
 async function load() {
@@ -45,6 +51,26 @@ onDeactivated(() => { visible.value = false; });
 watch(online, (on) => { if (on) load(); });
 watch(() => reader.value?.id, () => { status.value = null; error.value = ''; if (visible.value) load(); });
 
+// USB debugging is read again every 10 s while this view is shown (reading never prompts the reader), and at once when the view
+// or the reader appears, so a switch turned on at the reader shows up by itself
+const POLL_MS = 10_000;
+let pollTimer: number | undefined;
+function stopPoll() {
+  window.clearInterval(pollTimer);
+  pollTimer = undefined;
+}
+function poll() {
+  const id = reader.value?.id;
+  if (id && shouldPollAdb({ visible: visible.value, connected: online.value, connecting: !!adbConnecting[id], windowHidden: document.hidden })) refreshAdb(id);
+}
+watch(() => [visible.value, online.value, reader.value?.id] as const, () => {
+  stopPoll();
+  if (!visible.value || !online.value) return;
+  poll();
+  pollTimer = window.setInterval(poll, POLL_MS);
+}, { immediate: true });
+onBeforeUnmount(stopPoll);
+
 function onKey(e: KeyboardEvent) {
   if (e.key === 'F5' && online.value) { e.preventDefault(); load(); }
 }
@@ -64,15 +90,22 @@ const rows = computed(() => {
 });
 
 // what the capability table says, in words: first what works here, then what is done on the reader itself
-const works = computed(() => [
-  caps.files === 'filesystem' ? 'Browse the files and folders; upload, download, rename, move and delete them' : '',
-  caps.dashboardFormats.length ? `Publish dashboards as ${caps.dashboardFormats.map((f) => f.toUpperCase()).join(' or ')} files` : '',
-  'Pen note templates: pictures or dashboard pages saved to the noteTemplate folder show up in Boox Notes',
-].filter(Boolean));
+const FORMAT_NAME: Record<string, string> = { pdf: 'PDF', png: 'PNG' };
+const works = computed(() => {
+  const c = caps.value;
+  const formats = c.dashboardFormats.filter((f) => f in FORMAT_NAME).map((f) => FORMAT_NAME[f]);
+  return [
+    c.files === 'filesystem' ? 'Browse the files and folders; upload, download, rename, move and delete them' : '',
+    formats.length ? `Publish dashboards as ${formats.join(' or ')} files` : '',
+    'Pen note templates: pictures or dashboard pages saved to the noteTemplate folder show up in Boox Notes',
+    c.screenMirror ? "Show the reader's live screen, and its battery" : '',
+    c.openOnReader ? "Open a file on the reader's screen from the Files view" : '',
+  ].filter(Boolean);
+});
 const onReader = computed(() => [
-  !caps.openOnReader ? "Showing a dashboard on its screen: open the file from the reader's own file app" : '',
-  !caps.deviceSettings ? 'Date and time, Wi-Fi, standby and the like: change them on the reader' : '',
-  !caps.screenMirror ? "Showing the reader's screen here" : '',
+  !caps.value.openOnReader ? "Showing a dashboard on its screen: open the file from the reader's own file app" : '',
+  !caps.value.deviceSettings ? 'Date and time, Wi-Fi, standby and the like: change them on the reader' : '',
+  !caps.value.screenMirror ? "Showing the reader's screen here" : '',
   'Handwritten notes live inside the Notes app and are exported from there: Inkboard cannot read them over USB',
 ].filter(Boolean));
 
@@ -121,9 +154,22 @@ const copyMenu = (what: string, value: string) => (): MenuItem[] => [{ label: `C
             </dl>
             <p class="advice" :class="advice.level"><Icon :name="advice.level === 'ok' ? 'ok' : 'info'" :size="16" /><span>{{ advice.text }}</span></p>
           </section>
+
+          <AdbCard v-if="reader" :id="reader.id" />
         </div>
 
         <div class="right">
+          <ScreenPanel
+            v-if="ready && reader"
+            :key="reader.id"
+            title="Live screen"
+            :active="visible"
+            :fetch="() => api.adbScreenshot(reader!.id)"
+            :screen="adb[reader.id]?.screen"
+            need-focus
+            storage-key="inkboard.autoRefreshAdbScreen"
+          />
+
           <section class="card can" aria-label="What Inkboard can do">
             <h2>What Inkboard can do here</h2>
             <ul class="yes">

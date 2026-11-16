@@ -1,8 +1,9 @@
 // Which reader a dashboard is published to, and the small decisions around it. Pure: the readers list comes in as an argument.
 import { fmtBytes } from '../lib/format';
 import { capabilities, readerTitle } from '../lib/readers';
-import type { PublishFormat, PublishResult, PublishTarget, Reader, ReaderKind } from '../lib/types';
+import type { PublishFormat, PublishTarget, Reader, ReaderKind } from '../lib/types';
 import type { Dashboard, PublishOptions } from './model';
+import type { Pushed } from './publish';
 
 export const DPT_ID = 'dpt';
 export const DPT_TARGET: PublishTarget = { kind: 'dpt' };
@@ -82,7 +83,7 @@ export function targetName(d: Dashboard, readers: Reader[]): string {
 }
 
 /** the toast after a successful push: where it went, and never a claim that it was opened on a USB reader */
-export function describePushed(d: Dashboard, result: PublishResult, readers: Reader[]): string {
+export function describePushed(d: Dashboard, result: Pushed, readers: Reader[]): string {
   const target = targetOf(d);
   if (target.kind === 'dpt') {
     return `Published "${d.name}" to ${result.path} (${result.pages} ${result.pages === 1 ? 'page' : 'pages'}, ${fmtBytes(result.bytes)})`;
@@ -96,5 +97,9 @@ export function describePushed(d: Dashboard, result: PublishResult, readers: Rea
       : `Saved as a pen template to ${folder} on ${reader}. In Boox Notes, pick it under Template > Custom.`;
   }
   const where = `${result.path} on ${reader}`;
-  return target.format === 'png' && result.pages > 1 ? `Saved ${result.pages} images to ${where}` : `Saved to ${where}`;
+  if (target.format === 'png' && result.pages > 1) return `Saved ${result.pages} images to ${where}${result.opened ? ' and opened the first one' : ''}`;
+  return `Saved to ${where}${result.opened ? ' and opened it on the reader' : ''}`;
 }
+
+/** what the Reader panel says when the target reader cannot be mirrored (only a USB reader without debugging gets here) */
+export const MIRROR_NEEDS_DEBUGGING = "Open the saved file on the reader to see it. Turn on USB debugging on the reader's device page to mirror it.";

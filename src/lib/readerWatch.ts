@@ -1,8 +1,10 @@
 // Keeps app.readers current: a USB reader plugged in or pulled out shows up within a few seconds, and again at once when
-// the window gets focus. Started once from App.vue.
+// the window gets focus. It also keeps the USB debugging status of a connected reader fresh (the battery in the switcher).
+// Started once from App.vue.
 import { ref } from 'vue';
+import { adb, adbReady, refreshAdb } from './adb';
 import { app, refreshConnection, refreshReaders } from './store';
-import { dptStateDiffers } from './readerList';
+import { adbWork, dptStateDiffers } from './readerList';
 
 const EVERY_MS = 4000;
 
@@ -10,6 +12,7 @@ const EVERY_MS = 4000;
 export const readersReady = ref(false);
 
 let busy = false;
+let ticks = 0;
 async function refresh() {
   if (busy || document.hidden) return;
   busy = true;
@@ -17,6 +20,9 @@ async function refresh() {
     await refreshReaders();
     readersReady.value = true;
     if (dptStateDiffers(app.readers, app.conn) && !app.connecting) await refreshConnection();
+    const work = adbWork(app.readers, adbReady, ++ticks);
+    work.forget.forEach((id) => { adb[id] = undefined; });
+    work.refresh.forEach((id) => { refreshAdb(id); });
   } catch {
     // a failed poll keeps the last list; the next one tries again
   } finally {

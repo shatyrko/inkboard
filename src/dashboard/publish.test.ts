@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Source } from './data';
-import { buildMeta, collectSources, lumaFromRgba, loadSources, safeDocName } from './publish';
+import { buildMeta, collectSources, fileToOpenAfterPush, lumaFromRgba, loadSources, safeDocName, scaleLinks } from './publish';
 import { createWidget, newDashboard, newPage } from './model';
 import { gridOf } from './grid';
 
@@ -77,5 +77,54 @@ describe('loadSources', () => {
     expect(off['cmd:x']).toEqual({ ok: false, error: 'Commands are disabled in Settings', code: 'disabled' });
     const on = await loadSources([src('cmd:x', 'command', load)], { allowCommands: true });
     expect(on['cmd:x']).toEqual({ ok: true, value: 'out' });
+  });
+});
+
+describe('scaleLinks', () => {
+  const links = [{ x: 50, y: 100, w: 500, h: 150, page: 2 }];
+
+  it('moves link rectangles with the page when it is rendered larger', () => {
+    expect(scaleLinks(links, 2400 / 1650, 3200 / 2200)).toEqual([{ x: 73, y: 145, w: 727, h: 218, page: 2 }]);
+  });
+
+  it('leaves them alone at the standard size', () => {
+    expect(scaleLinks(links, 1, 1)).toBe(links);
+  });
+});
+
+describe('fileToOpenAfterPush', () => {
+  const usb = (format: 'pdf' | 'png' | 'template', publish: Partial<NonNullable<ReturnType<typeof newDashboard>['publish']>> = {}) => ({
+    ...newDashboard('Day plan'),
+    publish: { target: { kind: 'mtp' as const, readerId: 'mtp:ab12', folder: '', format }, ...publish },
+  });
+  const pdf = { path: 'Documents/Inkboard/Day plan.pdf', entryId: '', pages: 2, bytes: 1 };
+
+  it('opens the PDF a USB reader with debugging on has just been given', () => {
+    expect(fileToOpenAfterPush(usb('pdf'), pdf, true, true)).toBe('Documents/Inkboard/Day plan.pdf');
+  });
+
+  it('opens the only picture, or the first of several', () => {
+    expect(fileToOpenAfterPush(usb('png'), { ...pdf, path: 'Pictures/Inkboard/Day plan.png', pages: 1 }, true, true)).toBe('Pictures/Inkboard/Day plan.png');
+    expect(fileToOpenAfterPush(usb('png'), { ...pdf, path: 'Pictures/Inkboard', pages: 3 }, true, true)).toBe('Pictures/Inkboard/Day plan - 1.png');
+  });
+
+  it('names the first page file the way the file was written (a file-safe name)', () => {
+    const d = { ...usb('png'), name: 'Plan: A/B' };
+    expect(fileToOpenAfterPush(d, { ...pdf, path: 'Pictures/Inkboard', pages: 2 }, true, true)).toBe('Pictures/Inkboard/Plan- A-B - 1.png');
+  });
+
+  it('never opens a pen template: it is something to write on, not to look at', () => {
+    expect(fileToOpenAfterPush(usb('template'), { ...pdf, path: 'noteTemplate', pages: 2 }, true, true)).toBeNull();
+  });
+
+  it('does nothing without USB debugging, for the Digital Paper, or when the dashboard says not to', () => {
+    expect(fileToOpenAfterPush(usb('pdf'), pdf, false, true)).toBeNull();
+    expect(fileToOpenAfterPush(newDashboard('A'), pdf, true, true)).toBeNull();
+    expect(fileToOpenAfterPush(usb('pdf', { display: false }), pdf, true, true)).toBeNull();
+  });
+
+  it('follows the app setting until the dashboard has its own choice', () => {
+    expect(fileToOpenAfterPush(usb('pdf'), pdf, true, false)).toBeNull();
+    expect(fileToOpenAfterPush(usb('pdf', { display: true }), pdf, true, false)).toBe('Documents/Inkboard/Day plan.pdf');
   });
 });

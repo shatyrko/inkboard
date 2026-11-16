@@ -131,6 +131,11 @@ describe('names and messages', () => {
     expect(describePushed(toBoox(), result(), [boox()])).not.toMatch(/open/i);
   });
 
+  it('says when the file was also opened on the reader', () => {
+    expect(describePushed(toBoox(), { ...result(), opened: true }, [boox()])).toBe('Saved to Documents/Inkboard/Wall.pdf on Tab X C and opened it on the reader');
+    expect(describePushed(toBoox({ format: 'png' }), { ...result({ path: 'Pictures/Inkboard', pages: 2 }), opened: true }, [boox()])).toBe('Saved 2 images to Pictures/Inkboard on Tab X C and opened the first one');
+  });
+
   it('tells where a pen template went and where to pick it in Boox Notes', () => {
     const tpl = toBoox({ format: 'template' });
     expect(describePushed(tpl, result({ path: 'noteTemplate/Wall.png' }), [boox()])).toBe(

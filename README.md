@@ -16,13 +16,19 @@ Built with Tauri 2, Rust and Vue 3. Linux is the platform it is developed on; th
 | Library / files | its own library of PDFs | a file manager for the whole storage |
 | Upload, download, rename, move, delete | yes | yes (folders are deleted with their contents) |
 | Settings on the reader (clock, time zone, standby, Wi-Fi) | yes | no, change them on the reader |
-| Live mirror of the screen | yes | no |
-| Open a document on the reader's screen | yes | no, open it from the reader's own file app |
+| Live mirror of the screen | yes | with USB debugging (opt-in) |
+| Open a document on the reader's screen | yes | with USB debugging (opt-in); otherwise open it from the reader's own file app |
+| Battery | yes | with USB debugging |
 | Dashboards | PDF, opened right after publishing | PDF, PNG pages, or a pen template saved to a folder |
 | Pen | pen battery shown; note templates in Settings | pages saved to `noteTemplate` appear as custom templates in Boox Notes |
 
 Switch between readers with the selector at the top of the sidebar. A USB reader shows up there by itself when it is plugged
 in and set to file transfer (MTP). On Linux, the `libmtp` package ships the udev rules that let a normal user talk to it.
+
+**USB debugging (ADB) is opt-in.** Turn it on from the USB reader's device page after enabling it on the reader (Settings, Developer
+options). The reader asks you to approve this computer once. It gives this computer full control of the reader, so leave it off
+unless you want the live screen, battery and "open on the reader". Inkboard speaks the protocol itself over USB; no `adb` program is
+needed. Its key lives in `~/.config/inkboard/adbkey` and the approval can be revoked on the reader at any time.
 
 ## What it does
 

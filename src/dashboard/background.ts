@@ -4,11 +4,10 @@
 import { computed, ref, shallowReactive, watch } from 'vue';
 import { api } from '../lib/api';
 import { app } from '../lib/store';
-import type { PublishResult } from '../lib/types';
 import { notify } from '../lib/ui';
 import { listDashboards, loadDashboard } from './library';
 import type { Dashboard } from './model';
-import { publishDashboard, exportDashboardPdf, type Progress } from './publish';
+import { publishDashboard, exportDashboardPdf, type Progress, type Pushed } from './publish';
 import { isTargetReachable, targetOf } from './publish-target';
 import { PushScheduler, describeSchedule } from './schedule';
 
@@ -18,7 +17,7 @@ export type Busy = { id: string; progress: Progress };
 export type BackgroundDeps = {
   /** every stored dashboard, loaded and migrated */
   loadAll: () => Promise<Dashboard[]>;
-  push: (d: Dashboard, onProgress: (p: Progress) => void) => Promise<PublishResult>;
+  push: (d: Dashboard, onProgress: (p: Progress) => void) => Promise<Pushed>;
   exportPdf: (d: Dashboard, dest: string, onProgress: (p: Progress) => void) => Promise<void>;
   /** whether a push of this dashboard can go out now (its target reader is reachable); automatic pushes skip it quietly when not */
   isReachable: (d: Dashboard) => boolean;
@@ -103,7 +102,7 @@ export function createBackground(deps: BackgroundDeps) {
   }
 
   /** Publish pressed in the UI: shares the lock with automatic pushes and counts as a run for the schedule. Rejects on failure. */
-  async function push(d: Dashboard): Promise<PublishResult> {
+  async function push(d: Dashboard): Promise<Pushed> {
     try {
       const result = await exclusive(d, (onProgress) => deps.push(d, onProgress));
       failing.delete(d.id);

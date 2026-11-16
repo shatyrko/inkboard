@@ -89,6 +89,13 @@ describe('migrateDashboard', () => {
     expect(d.publish).toEqual({ target: { kind: 'mtp', readerId: 'mtp:ab12', folder: 'Documents/Wall', format: 'png' }, targetName: 'Tab X C' });
   });
 
+  it('keeps a valid resolution choice and drops anything else', () => {
+    expect(migrateDashboard({ publish: { resolution: 'standard' } }).publish?.resolution).toBe('standard');
+    expect(migrateDashboard({ publish: { resolution: 'native' } }).publish?.resolution).toBe('native');
+    expect(migrateDashboard({ publish: { resolution: 'huge' } }).publish).toEqual({ target: { kind: 'dpt' } });
+    expect(migrateDashboard({}).publish?.resolution).toBeUndefined();
+  });
+
   it('keeps the pen template format', () => {
     expect(migrateDashboard({ publish: { target: { kind: 'mtp', readerId: 'mtp:x', format: 'template' } } }).publish?.target).toEqual({ kind: 'mtp', readerId: 'mtp:x', folder: '', format: 'template' });
   });

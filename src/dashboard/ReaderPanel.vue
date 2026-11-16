@@ -9,8 +9,12 @@ import { fitScale } from './grid';
 import { dataUrlToBlob } from './reader-preview';
 
 const props = defineProps<{
-  /** false when the target reader cannot be mirrored: the panel then only explains why */
+  /** false when the target reader cannot be mirrored: the panel then only shows `info` */
   available: boolean;
+  /** what to say when it cannot */
+  info: string;
+  /** the Digital Paper can be reconnected from here; a USB reader has to be plugged in */
+  canReconnect: boolean;
   image: string | null;
   updatedAt: number | null;
   loading: boolean;
@@ -85,7 +89,7 @@ const menu = (): MenuItem[] => [
     <div v-if="!available" class="stage">
       <div class="unavailable">
         <Icon name="info" :size="22" />
-        <p>Screen mirroring is only available for the Digital Paper. Open the saved file on the reader to see it.</p>
+        <p>{{ info }}</p>
       </div>
     </div>
 
@@ -100,7 +104,7 @@ const menu = (): MenuItem[] => [
       <template v-if="!connected">
         <Icon name="unplug" :size="16" />
         <div class="msg"><b>Reader not connected</b><span :title="reason">{{ reason || 'Connect the reader to see its screen.' }}</span></div>
-        <button class="btn small" :disabled="connecting" @click="emit('reconnect')"><span v-if="connecting" class="spinner"></span><Icon v-else name="refresh" :size="14" />Reconnect</button>
+        <button v-if="canReconnect" class="btn small" :disabled="connecting" @click="emit('reconnect')"><span v-if="connecting" class="spinner"></span><Icon v-else name="refresh" :size="14" />Reconnect</button>
       </template>
       <template v-else-if="error">
         <Icon name="warn" :size="16" class="bad" />

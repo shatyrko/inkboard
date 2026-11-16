@@ -21,3 +21,6 @@ export const goTo = (stack: readonly Crumb[], index: number): Crumb[] => stack.s
 
 /** "Books/Fiction", empty at the root */
 export const folderPath = (stack: readonly Crumb[]): string => stack.slice(1).map((c) => c.name).join('/');
+
+/** where a file in the folder being looked at lives, relative to the storage root ("Documents/Inkboard/Day.pdf"): what the reader is asked to open */
+export const storageRelativePath = (stack: readonly Crumb[], name: string): string => [...stack.slice(1).map((c) => c.name), name].join('/');

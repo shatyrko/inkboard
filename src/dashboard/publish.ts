@@ -1,7 +1,9 @@
 // From a dashboard to the reader: gather live data, render every page to 8-bit grayscale, hand the pixels to the Rust side.
 // Nothing here aborts on a failing data source: that widget just draws "unavailable".
 import { api } from '../lib/api';
-import type { AppSettings, PublishMeta, PublishPage, PublishResult } from '../lib/types';
+import { adb, adbReady } from '../lib/adb';
+import { capabilitiesWith } from '../lib/readers';
+import type { AppSettings, LinkRect, PublishMeta, PublishPage, PublishResult } from '../lib/types';
 import { emptyBag, fail, ok, type DataBag, type Source, type SourceKind } from './data';
 import { ensureFonts, fontSample } from './fonts';
 import { pageSize } from './grid';
@@ -9,6 +11,7 @@ import { pageLinks } from './links';
 import type { Dashboard } from './model';
 import { targetOf } from './publish-target';
 import { renderPage, sourceOf } from './render';
+import { renderSizeFor, type Size } from './resolution';
 
 /** how long one source may take before its widget gives up (the Rust side has its own, shorter limits) */
 const TIMEOUTS_MS: Record<SourceKind, number> = { system: 8_000, reader: 10_000, web: 15_000, command: 12_000, image: 10_000 };
@@ -69,10 +72,22 @@ export function lumaFromRgba(rgba: Uint8ClampedArray, out: Uint8Array, offset: n
 
 export type Rendered = { pixels: Uint8Array; pages: PublishPage[] };
 
-/** Renders every page at full size (1650 x 2200, or 2200 x 1650) on its own canvas; devicePixelRatio plays no part. */
-export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (index: number, total: number) => void): Promise<Rendered> {
+/** link rectangles follow the page when it is rendered at another size than the standard one */
+export function scaleLinks(links: LinkRect[], sx: number, sy: number): LinkRect[] {
+  if (sx === 1 && sy === 1) return links;
+  return links.map((l) => ({ ...l, x: Math.round(l.x * sx), y: Math.round(l.y * sy), w: Math.round(l.w * sx), h: Math.round(l.h * sy) }));
+}
+
+/**
+ * Renders every page on its own canvas at `out` pixels (the standard 1650 x 2200, or 2200 x 1650, by default); devicePixelRatio
+ * plays no part. A larger `out` scales the drawing itself, so everything stays sharp; memory is one page of RGBA at a time
+ * plus the 8-bit result (a 2400 x 3200 page is 7.7 MB of it).
+ */
+export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (index: number, total: number) => void, out?: Size): Promise<Rendered> {
   await ensureFonts(fontSample(d, data));
-  const { width, height } = pageSize(d.orientation);
+  const page = pageSize(d.orientation);
+  const { width, height } = out ?? page;
+  const sx = width / page.width, sy = height / page.height;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -85,9 +100,10 @@ export async function renderAllPages(d: Dashboard, data: DataBag, onPage?: (inde
     onPage?.(i, d.pages.length);
     // let the progress text paint before the next (synchronous, ~100 ms) page render
     await new Promise((r) => setTimeout(r));
-    renderPage(g, d.pages[i], data, { width, height, dashboard: d, pageIndex: i });
+    g.setTransform(sx, 0, 0, sy, 0, 0);
+    renderPage(g, d.pages[i], data, { width: page.width, height: page.height, dashboard: d, pageIndex: i });
     lumaFromRgba(g.getImageData(0, 0, width, height).data, pixels, i * width * height);
-    pages.push({ width, height, links: pageLinks(d, i) });
+    pages.push({ width, height, links: scaleLinks(pageLinks(d, i), sx, sy) });
   }
   return { pixels, pages };
 }
@@ -114,21 +130,59 @@ export function buildMeta(d: Dashboard, pages: PublishPage[], settings: Pick<App
 export type Progress = { stage: 'data' | 'render' | 'upload'; page?: number; pages?: number };
 export type PushOptions = { settings: AppSettings; onProgress?: (p: Progress) => void };
 
-async function prepare(d: Dashboard, o: PushOptions): Promise<{ meta: PublishMeta; pixels: Uint8Array }> {
+/** what a push returns: the saved file's result, and what happened when it was also shown on the reader */
+export type Pushed = PublishResult & {
+  /** shown on the reader's screen (USB readers with debugging on) */
+  opened?: boolean;
+  /** why showing it failed; the file is saved anyway */
+  openError?: string;
+};
+
+/**
+ * The file to show on a USB reader after pushing, or null when that is not wanted or not possible: it needs the reader's
+ * debugging connection, the dashboard's "open after pushing" choice, and a format worth opening (a pen template is not).
+ * Several PNG pages open the first one.
+ */
+export function fileToOpenAfterPush(d: Dashboard, result: PublishResult, ready: boolean, displayDefault: boolean): string | null {
+  const t = targetOf(d);
+  if (t.kind !== 'mtp' || t.format === 'template') return null;
+  if (!capabilitiesWith('mtp', ready).openOnReader || !(d.publish?.display ?? displayDefault)) return null;
+  return t.format === 'png' && result.pages > 1 ? `${result.path}/${safeDocName(d.name)} - 1.png` : result.path;
+}
+
+async function prepare(d: Dashboard, o: PushOptions, pictures: boolean): Promise<{ meta: PublishMeta; pixels: Uint8Array }> {
   o.onProgress?.({ stage: 'data' });
   const data = await collectData(d, { allowCommands: o.settings.allowCommands });
-  const { pixels, pages } = await renderAllPages(d, data, (page, total) => o.onProgress?.({ stage: 'render', page: page + 1, pages: total }));
+  const t = targetOf(d);
+  // only pictures for a USB reader follow its screen; a PDF is always laid out at the standard size
+  const size = pictures && t.kind === 'mtp' ? renderSizeFor(d, adb[t.readerId]?.screen) : undefined;
+  const { pixels, pages } = await renderAllPages(d, data, (page, total) => o.onProgress?.({ stage: 'render', page: page + 1, pages: total }), size);
   return { meta: buildMeta(d, pages, o.settings), pixels };
 }
 
-export async function publishDashboard(d: Dashboard, o: PushOptions): Promise<PublishResult> {
-  const { meta, pixels } = await prepare(d, o);
+export async function publishDashboard(d: Dashboard, o: PushOptions): Promise<Pushed> {
+  const { meta, pixels } = await prepare(d, o, true);
   o.onProgress?.({ stage: 'upload' });
-  return api.publishDashboard(meta, pixels);
+  const result = await api.publishDashboard(meta, pixels);
+  return openOnReader(d, result, o.settings);
+}
+
+/** shows the pushed file on a USB reader whose debugging connection is open; a failure leaves the saved file alone */
+async function openOnReader(d: Dashboard, result: PublishResult, settings: AppSettings): Promise<Pushed> {
+  const t = targetOf(d);
+  if (t.kind !== 'mtp') return result;
+  const file = fileToOpenAfterPush(d, result, adbReady(t.readerId), settings.displayAfterPush);
+  if (!file) return result;
+  try {
+    await api.adbOpen(t.readerId, file);
+    return { ...result, opened: true };
+  } catch (e) {
+    return { ...result, openError: typeof e === 'string' ? e : (e as Error)?.message || 'The reader did not answer' };
+  }
 }
 
 export async function exportDashboardPdf(d: Dashboard, dest: string, o: PushOptions): Promise<void> {
-  const { meta, pixels } = await prepare(d, o);
+  const { meta, pixels } = await prepare(d, o, false);
   await api.exportDashboardPdf(meta, pixels, dest);
 }
 

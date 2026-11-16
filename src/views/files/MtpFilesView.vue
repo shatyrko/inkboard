@@ -8,6 +8,7 @@ import UsbOffline from '../../components/UsbOffline.vue';
 import { api, onFilesDropped } from '../../lib/api';
 import { menu, type MenuItem } from '../../lib/contextmenu';
 import { fmtBytes } from '../../lib/format';
+import { adbReady, refreshAdb } from '../../lib/adb';
 import { activeReader } from '../../lib/store';
 import type { MtpEntry, MtpStatus } from '../../lib/types';
 import { dialog, notify } from '../../lib/ui';
@@ -22,6 +23,7 @@ import MtpFolderPicker from './MtpFolderPicker.vue';
 import MtpTable from './MtpTable.vue';
 import { currentHandle, enterFolder, goTo, goUp, startStack, type Crumb } from './nav';
 import { tipFor } from './tips';
+import { isMainStorage } from './usb';
 
 const reader = computed(() => activeReader());
 const readerId = computed(() => reader.value?.id ?? '');
@@ -135,7 +137,10 @@ function navigate(next: Crumb[]) {
   leaveFolder();
   listFolder();
 }
-const open = (e: MtpEntry) => { if (e.kind === 'folder') navigate(enterFolder(stack.value, e)); };
+function open(e: MtpEntry) {
+  if (e.kind === 'folder') navigate(enterFolder(stack.value, e));
+  else if (canOpenOnReader.value) actions.openOnReader(e);
+}
 const goUpLevel = () => { if (!atRoot.value) navigate(goUp(stack.value)); };
 const goToCrumb = (i: number) => { if (i < stack.value.length - 1) navigate(goTo(stack.value, i)); };
 function chooseStorage(id: number) {
@@ -208,6 +213,7 @@ function rowMenu(e: MtpEntry): MenuItem[] {
   const files = list.every((x) => x.kind === 'file');
   const items: MenuItem[] = [];
   if (one?.kind === 'folder') items.push({ label: 'Open', icon: 'folder-open', hint: 'Enter', action: () => open(one) });
+  if (one?.kind === 'file' && canOpenOnReader.value) items.push({ label: 'Open on reader', icon: 'show', hint: 'Enter', action: () => open(one) });
   if (files) items.push({ label: 'Download...', icon: 'download', action: () => act(() => actions.download(list)) });
   if (items.length) items.push({ separator: true });
   items.push(
@@ -277,7 +283,10 @@ let shown = false;
 onActivated(async () => {
   shown = true;
   window.addEventListener('keydown', onWindowKey);
-  if (online.value) { if (status.value) listFolder(); else init(); }
+  if (online.value) {
+    refreshAdb(readerId.value); // never prompts; tells whether files can be opened on the reader
+    if (status.value) listFolder(); else init();
+  }
   const off = await onFilesDropped({
     enter: () => { dragging.value = online.value && storageId.value !== null; },
     leave: () => { dragging.value = false; },
@@ -304,6 +313,8 @@ watch(readerId, () => { forget(); if (online.value) init(); });
 watch(online, (on) => { if (on) { forget(); init(); } });
 const where = computed(() => stack.value[stack.value.length - 1]?.name ?? '');
 const storages = computed(() => status.value?.storages ?? []);
+// "Open on the reader" needs USB debugging, and the reader is asked by a path inside its main storage
+const canOpenOnReader = computed(() => adbReady(readerId.value) && isMainStorage(storages.value, storageId.value));
 const pickerTitle = computed(() => {
   const m = picker.value?.moving ?? [];
   return m.length === 1 ? `Move "${m[0].name}" to...` : `Move ${m.length} items to...`;

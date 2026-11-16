@@ -168,6 +168,31 @@ describe('after a push', () => {
   });
 });
 
+describe('reset', () => {
+  it('forgets the old picture, error and failure streak and looks again', async () => {
+    const capture = vi.fn<() => Promise<string>>().mockResolvedValueOnce('first').mockRejectedValueOnce('asleep').mockResolvedValue('second');
+    const { p, onFailureStreak } = setup(capture);
+    p.update(ALL);
+    await flush();
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    expect(p.error.value).toBe('asleep');
+    p.reset();
+    expect(p.image.value).toBeNull();
+    expect(p.error.value).toBe('');
+    await flush();
+    expect(p.image.value).toBe('second');
+    expect(onFailureStreak).toHaveBeenCalledTimes(1);
+    p.dispose();
+  });
+
+  it('does not look when nobody is watching', async () => {
+    const { p, capture } = setup();
+    p.reset();
+    await flush();
+    expect(capture).not.toHaveBeenCalled();
+  });
+});
+
 describe('a call that never returns', () => {
   it('fails after the timeout, frees the slot and carries on with the next tick', async () => {
     const capture = vi.fn<() => Promise<string>>().mockImplementationOnce(() => new Promise(() => {})).mockResolvedValue('fine');

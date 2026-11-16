@@ -38,7 +38,8 @@ export function usePushing({ open, flush }: Deps) {
       await flush();
       const latest = open.value ?? d;
       const result = await attempt(() => background.push(latest), 'Could not publish');
-      if (result) notify(describePushed(latest, result, app.readers));
+      // a failure to show the file on a USB reader is news, not a failed publish: the file is saved
+      if (result) notify(result.openError ? `Saved, but could not open it on the reader: ${result.openError}` : describePushed(latest, result, app.readers));
     } finally {
       working.value = false;
     }

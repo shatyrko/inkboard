@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { currentHandle, enterFolder, folderPath, goTo, goUp, startStack } from './nav';
+import { currentHandle, enterFolder, folderPath, goTo, goUp, startStack, storageRelativePath } from './nav';
 
 describe('folder navigation', () => {
   const root = startStack('Internal storage');
@@ -29,5 +29,19 @@ describe('folder navigation', () => {
     goUp(s);
     goTo(s, 0);
     expect(s).toHaveLength(2);
+  });
+});
+
+describe('storageRelativePath', () => {
+  const root = startStack('Internal storage');
+  it('is just the name at the storage root', () => {
+    expect(storageRelativePath(root, 'Day.pdf')).toBe('Day.pdf');
+  });
+  it('joins the folder names above the file', () => {
+    const s = enterFolder(enterFolder(root, { handle: 5, name: 'Documents' }), { handle: 9, name: 'Inkboard' });
+    expect(storageRelativePath(s, 'Day.pdf')).toBe('Documents/Inkboard/Day.pdf');
+  });
+  it('leaves the storage name out', () => {
+    expect(storageRelativePath(root, 'a').startsWith('Internal')).toBe(false);
   });
 });

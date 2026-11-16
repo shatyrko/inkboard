@@ -4,6 +4,7 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 import Icon from '../components/Icon.vue';
 import PageBar from '../components/PageBar.vue';
 import { menu, type MenuItem } from '../lib/contextmenu';
+import { refreshAdb } from '../lib/adb';
 import { app, connectNow, refreshReaders } from '../lib/store';
 import type { DashboardSummary } from '../lib/types';
 import { askDialog, attempt, chooseDialog, confirmDialog, dialog, notify } from '../lib/ui';
@@ -12,7 +13,7 @@ import { hasClipboard, useEditor } from '../dashboard/editor';
 import { commandForKey, type Command } from '../dashboard/keys';
 import { byName, createFromSample, deleteDashboard, duplicateDashboard, listDashboards, loadDashboard, saveDashboard } from '../dashboard/library';
 import type { Widget, WidgetType } from '../dashboard/model';
-import { targetOf } from '../dashboard/publish-target';
+import { isTargetReachable, targetOf } from '../dashboard/publish-target';
 import PageTabs from '../dashboard/PageTabs.vue';
 import { usePreviewData } from '../dashboard/preview-data';
 import PropsPanel from '../dashboard/PropsPanel.vue';
@@ -75,6 +76,14 @@ const preview = usePreviewData(() => app.settings?.allowCommands ?? false);
 const { busy, busyText, publish, exportPdf, scheduleText } = usePushing({ open: doc, flush: () => ed.flush() });
 const reader = useReaderPanel({ hasDoc: computed(() => !!doc.value), selectedId, target: computed(() => targetOf(doc.value)) });
 const { on: readerOn, side, work, wide, bind: readerBind } = reader;
+
+// USB debugging on the target reader decides what a USB target can do (open after pushing, mirroring, the reader's own
+// resolution): read its status (this never prompts on the reader) when the target changes or the reader appears
+function refreshTargetAdb() {
+  const t = targetOf(doc.value);
+  if (t.kind === 'mtp' && isTargetReachable(t, app.readers, false)) void refreshAdb(t.readerId);
+}
+watch(() => { const t = targetOf(doc.value); return t.kind === 'mtp' && isTargetReachable(t, app.readers, false) ? t.readerId : ''; }, refreshTargetAdb, { immediate: true });
 
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
 watch(doc, (d) => {
@@ -309,6 +318,7 @@ onActivated(() => {
   window.addEventListener('keydown', onKey);
   // the "Publish to" list should show the readers that are plugged in now
   void refreshReaders().catch(() => {});
+  refreshTargetAdb();
   if (doc.value) void preview.load(doc.value, { force: true });
 });
 onDeactivated(() => {
