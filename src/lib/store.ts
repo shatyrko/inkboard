@@ -5,8 +5,18 @@ import type { AppSettings, ConnectionState } from './types';
 
 export type ViewName = 'device' | 'library' | 'dashboards' | 'settings';
 
+const VIEWS: ViewName[] = ['device', 'library', 'dashboards', 'settings'];
+/** `?view=dashboards` opens on that section (handy for screenshots and for `tauri dev --config` runs) */
+function startView(): ViewName {
+  try {
+    const v = new URLSearchParams(location.search).get('view') as ViewName | null;
+    if (v && VIEWS.includes(v)) return v;
+  } catch { /* no location in tests */ }
+  return 'device';
+}
+
 export const app = reactive({
-  view: 'device' as ViewName,
+  view: startView(),
   conn: null as ConnectionState | null,
   /** true while the first connection attempt is running */
   connecting: false,

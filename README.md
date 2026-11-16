@@ -67,7 +67,7 @@ pnpm test                # drawing, grid, undo and the other pure logic of the U
 
 `pnpm dev` serves the page in an ordinary browser, where a built-in mock backend answers every command with invented data.
 Useful URL switches: `?mock=paired` (start already connected), `?mock=big` (a 2000-entry library), `?mock=offline`,
-`?mock=legacy` (offer to import old keys), `?theme=dark|light`, `?chrome` (draw the window buttons).
+`?mock=legacy` (offer to import old keys), `?theme=dark|light`, `?view=device|library|dashboards|settings` (open on a section), `?chrome` (draw the window buttons).
 
 ### Talking to a reader from the command line
 
