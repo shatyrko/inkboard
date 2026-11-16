@@ -109,7 +109,6 @@ h2 { font-size: 16px; }
 .app { display: grid; grid-template-columns: 224px 1fr; height: 100%; }
 .side { background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
 .side-top { height: var(--bar); display: flex; align-items: center; gap: 10px; padding: 0 16px; }
-.logo { width: 26px; height: 26px; border-radius: 28%; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); flex: none; }
 .brand { font-weight: 650; letter-spacing: -0.01em; }
 .nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
 .nav-item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: var(--radius-s); color: var(--muted); text-align: left; width: 100%; }

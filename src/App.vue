@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import Icon from './components/Icon.vue';
+import Logo from './components/Logo.vue';
 import ContextMenu from './components/ContextMenu.vue';
 import DialogHost from './components/DialogHost.vue';
 import WindowControls from './components/WindowControls.vue';
@@ -63,7 +64,7 @@ onBeforeUnmount(() => {
   <div v-else-if="app.conn" class="app">
     <aside class="side">
       <div class="side-top" data-drag>
-        <div class="logo" data-drag><Icon name="book" :size="15" /></div>
+        <Logo :size="26" data-drag />
         <span class="brand" data-drag>Inkboard</span>
       </div>
       <nav class="nav" aria-label="Sections">

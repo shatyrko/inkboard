@@ -2,6 +2,7 @@
 // First run: find the reader, then pair with the PIN it shows on its own screen. Takes the whole window.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../components/Icon.vue';
+import Logo from '../components/Logo.vue';
 import { api } from '../lib/api';
 import { app, connectNow, refreshConnection } from '../lib/store';
 import type { DiscoveredDevice } from '../lib/types';
@@ -158,7 +159,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
     <div class="scroll">
       <div class="wrap">
         <div class="hero">
-          <div class="logo big"><Icon name="book" :size="24" /></div>
+          <Logo :size="52" class="brand-mark" />
           <h1>Connect your reader</h1>
           <p>Inkboard manages a Sony Digital Paper (DPT-RP1) over Wi-Fi and turns it into a dashboard screen.</p>
         </div>
@@ -269,7 +270,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .hero { text-align: center; margin-bottom: 18px; }
 .hero h1 { font-size: 24px; margin: 14px 0 6px; }
 .hero p { margin: 0 auto; max-width: 400px; color: var(--muted); }
-.logo.big { width: 52px; height: 52px; margin: 0 auto; }
+.brand-mark { display: block; margin: 0 auto; }
 
 .steps { list-style: none; display: flex; align-items: center; gap: 10px; justify-content: center; margin: 0 0 16px; padding: 0; color: var(--faint); font-size: 13px; }
 .steps li { display: flex; align-items: center; gap: 8px; }
