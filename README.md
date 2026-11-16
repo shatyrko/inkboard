@@ -53,6 +53,24 @@ needed. Its key lives in `~/.config/inkboard/adbkey` and the approval can be rev
 
 Not included, on purpose: **firmware updates**. The reader is out of support and there is nothing to update to.
 
+### A Telegram dashboard
+
+"New dashboard" has a **Telegram** starting point: your 15 newest messages across all chats (sender, chat, time and a line or two of
+text; photos and voice messages show as `[photo]`, `[voice message]`) plus the time of the last refresh. It uses the Command widget
+to run a small helper, so it needs **Allow shell commands** in Settings.
+
+```bash
+scripts/telegram/setup.sh                          # once: a private Python environment with Telethon, in ~/.config/inkboard/telegram
+~/.config/inkboard/telegram/inkboard-telegram login   # once: api_id/api_hash from my.telegram.org, then phone, code and 2FA password
+~/.config/inkboard/telegram/inkboard-telegram recent 15   # check it in the terminal
+```
+
+The helper signs in as your own Telegram account, so the session file next to it (`~/.config/inkboard/telegram`, owner-only) is a
+login for that account: keep it out of backups you share, and `inkboard-telegram logout` ends it. The messages are drawn into the
+PDF that is uploaded to the reader, so anything in your chats can end up on its screen and in its storage. Options:
+`--only-incoming` leaves out your own messages, `--lines` sets how much text is kept per message, and `--demo` prints invented messages
+without touching the network.
+
 ## Things worth knowing
 
 - **PDF only.** The reader opens PDF files and nothing else. Convert EPUB, FB2 or MOBI first (for example with Calibre).

@@ -38,10 +38,22 @@ function status(name: string): Dashboard {
   return newDashboard(name, [page]);
 }
 
+/** The helper that prints the messages is installed by scripts/telegram/setup.sh (see the README). Text is 30 px, so 80 of the 82 columns that fit are used; 15 messages of 3 lines fill the 45 rows. */
+export const TELEGRAM_COMMAND = '~/.config/inkboard/telegram/inkboard-telegram recent 15 --width 80 --lines 2';
+
+function telegram(name: string): Dashboard {
+  const page = newPage('Telegram', [
+    put('command', { x: 1, y: 1, w: 31, h: 38 }, { command: TELEGRAM_COMMAND, title: 'Latest messages', size: 30 }),
+    put('clock', { x: 1, y: 40, w: 31, h: 4 }, { show: 'time', label: 'Updated at' }),
+  ]);
+  return newDashboard(name, [page]);
+}
+
 export type Sample = { id: string; label: string; blurb: string; make: (name: string) => Dashboard };
 
 export const SAMPLES: Sample[] = [
   { id: 'blank', label: 'Blank', blurb: 'An empty page', make: (name) => newDashboard(name) },
   { id: 'daily', label: 'Daily', blurb: 'Clock, calendar, countdown and a checklist', make: daily },
   { id: 'status', label: 'Computer status', blurb: 'Computer and reader meters', make: status },
+  { id: 'telegram', label: 'Telegram', blurb: 'The 15 newest Telegram messages (needs the helper in scripts/telegram)', make: telegram },
 ];

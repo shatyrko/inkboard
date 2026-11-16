@@ -23,6 +23,27 @@ function persist() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...docs.values()])); } catch { /* storage can be unavailable or full */ }
 }
 
+// What `inkboard-telegram recent 15` prints (scripts/telegram), with invented chats and messages.
+const telegramDemo = [
+  ['18:50', 'Ada Lovelace', 'Are we still on for the demo at four? I can bring the printed slides if the', 'projector acts up again.'],
+  ['18:42', 'Book club · Grace', 'Chapter nine is the long one, so maybe start early. The ending is worth it', 'though, no spoilers!'],
+  ['18:29', 'Plumber', '[photo] Found the leak, it was the old valve under the sink.'],
+  ['17:58', 'Weekend hike · Linus', 'Trail is dry, boots are enough.'],
+  ['17:18', 'Family · Mom', "Dinner on Sunday? I'm making soup."],
+  ['16:43', '→ Ada Lovelace', 'Thanks!'],
+  ['14:33', 'Neighbours · Alan', '[voice message]'],
+  ['12:13', 'Release notes · Margaret', 'v2.4 is out: faster sync, a new export dialog and a lot of small fixes. Full', 'list in the pinned message.'],
+  ['Yest 17:53', 'Chess club · Kasparov', 'Rematch next Thursday?'],
+  ['Yest 14:33', 'Library', 'Your reserved book is ready for pickup until Friday.'],
+  ['Sat 18:33', 'Garden swap · Flora', '[photo] Tomato seedlings, free to a good home.'],
+  ['Fri 17:33', 'Ada Lovelace', 'Sent you the notes from Monday.'],
+  ['Thu 18:13', 'Weekend hike · Linus', 'Meeting point is the north gate.'],
+  ['Tue 12:53', 'Book club · Grace', 'Next month: something short, please.'],
+  ['8 Nov', 'Family · Dad', '[sticker 👍]'],
+]
+  .map(([when, who, ...text]) => [`${when.padEnd(10)} ${who}`, ...text.map((l) => `  ${l}`)].join('\n'))
+  .join('\n');
+
 // ---------- invented machine stats that drift a little between calls ----------
 let cpu = 23;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -123,6 +144,7 @@ export const handlers: Record<string, (a: any) => unknown> = {
 
   run_command: ({ command }: { command: string }) => {
     if (!(device.settings_get({}) as { allowCommands: boolean }).allowCommands) throw 'Commands are disabled in Settings';
+    if (command.includes('inkboard-telegram')) return telegramDemo;
     return `$ ${command}\nup 3 days, 5 hours, 17 minutes\n\nFilesystem      Size  Used Avail Use%\n/dev/nvme0n1p2  477G  289G  188G  61%\n`;
   },
 

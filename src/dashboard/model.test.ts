@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { gridOf } from './grid';
 import { coerceProps, createWidget, migrateDashboard, newDashboard } from './model';
-import { SAMPLES } from './samples';
+import { SAMPLES, TELEGRAM_COMMAND } from './samples';
 
 describe('migrateDashboard', () => {
   it('turns nothing at all into a valid one-page dashboard', () => {
@@ -20,6 +20,16 @@ describe('migrateDashboard', () => {
     const loaded = migrateDashboard(JSON.parse(JSON.stringify(d)));
     expect(loaded).toEqual({ ...d, publish: { target: { kind: 'dpt' } } });
     expect(migrateDashboard(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded);
+  });
+
+  it('the Telegram sample is a command widget that reads 15 messages, plus a clock', () => {
+    const d = SAMPLES.find((s) => s.id === 'telegram')!.make('Telegram');
+    const [cmd, clock] = d.pages[0].widgets;
+    expect(cmd.type).toBe('command');
+    expect(cmd.props).toMatchObject({ command: TELEGRAM_COMMAND, size: 30 });
+    expect(TELEGRAM_COMMAND).toMatch(/ recent 15 /);
+    expect(clock.type).toBe('clock');
+    expect(migrateDashboard(JSON.parse(JSON.stringify(d))).pages[0].widgets).toHaveLength(2);
   });
 
   it('drops unknown widget types and widgets that are not objects', () => {

@@ -113,7 +113,7 @@ async function refreshList() {
 async function createDashboard() {
   const choice = await chooseDialog({
     title: 'New dashboard',
-    body: 'Daily has a clock, calendar, countdown and a checklist. Computer status shows meters for this computer and the reader.',
+    body: 'Daily has a clock, calendar, countdown and a checklist. Computer status shows meters for this computer and the reader. Telegram lists your 15 newest messages (it needs the helper from the README).',
     buttons: SAMPLES.map((s) => ({ label: s.label, value: s.id, kind: s.id === 'blank' ? 'plain' : 'primary' })),
   });
   const sample = SAMPLES.find((s) => s.id === choice);

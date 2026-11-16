@@ -11,3 +11,4 @@
 /*.pem
 /deviceid.dat
 /privatekey.dat
+__pycache__/
