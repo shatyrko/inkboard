@@ -77,7 +77,7 @@ export const api = {
       return invoke<PublishResult>('dashboard_publish', pixels, { headers: { 'x-meta': encodeURIComponent(JSON.stringify(meta)) } });
     }
     const { handle } = await import('../mock');
-    return (await handle('dashboard_publish', { meta, bytes: pixels.length })) as PublishResult;
+    return (await handle('dashboard_publish', { meta, pixels })) as PublishResult;
   },
   /** saves the same PDF to a local file instead of uploading it */
   async exportDashboardPdf(meta: PublishMeta, pixels: Uint8Array, dest: string): Promise<void> {

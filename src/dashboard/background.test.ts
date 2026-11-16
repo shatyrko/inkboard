@@ -109,6 +109,24 @@ describe('automatic pushes', () => {
   });
 });
 
+describe('lastPush', () => {
+  it('records every successful push, automatic or manual, and not the failed ones', async () => {
+    const { bg, push, pass } = setup();
+    const d = scheduled('Wall');
+    bg.put(d);
+    expect(bg.lastPush.value).toBeNull();
+    await pass(5);
+    expect(bg.lastPush.value).toMatchObject({ id: d.id });
+    const first = bg.lastPush.value;
+    push.mockRejectedValueOnce('offline');
+    await expect(bg.push(d)).rejects.toBe('offline');
+    expect(bg.lastPush.value).toBe(first);
+    await bg.push(d);
+    expect(bg.lastPush.value).not.toBe(first);
+    bg.stop();
+  });
+});
+
 describe('failures', () => {
   it('toast once per failing streak, again after a success', async () => {
     const { bg, push, onScheduledFailure, pass } = setup();

@@ -4,7 +4,7 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 import Icon from '../components/Icon.vue';
 import PageBar from '../components/PageBar.vue';
 import { menu, type MenuItem } from '../lib/contextmenu';
-import { app } from '../lib/store';
+import { app, connectNow } from '../lib/store';
 import type { DashboardSummary } from '../lib/types';
 import { askDialog, attempt, chooseDialog, confirmDialog, dialog, notify } from '../lib/ui';
 import DashboardList from '../dashboard/DashboardList.vue';
@@ -17,6 +17,8 @@ import { usePreviewData } from '../dashboard/preview-data';
 import PropsPanel from '../dashboard/PropsPanel.vue';
 import { background } from '../dashboard/background';
 import { usePushing } from '../dashboard/pushing';
+import ReaderPanel from '../dashboard/ReaderPanel.vue';
+import { useReaderPanel } from '../dashboard/useReaderPanel';
 import { sourceOf } from '../dashboard/render';
 import { SAMPLES } from '../dashboard/samples';
 import StageCanvas from '../dashboard/StageCanvas.vue';
@@ -35,8 +37,18 @@ function writeStore(key: string, value: string) {
 
 const entries = ref<DashboardSummary[]>([]);
 const loading = ref(true);
-// a narrow window gets the editor first: the dashboard list starts collapsed unless it was opened on purpose
-const listOpen = ref(readStore(LIST_KEY) === null ? window.innerWidth >= 1180 : readStore(LIST_KEY) === '1');
+// A narrow window gets the editor first: below this width the dashboard list is hidden until it is opened on purpose.
+// The remembered choice only counts in a window that is wide enough for the list to make sense.
+const LIST_MIN_WINDOW = 1180;
+const windowWidth = ref(window.innerWidth);
+const storedList = readStore(LIST_KEY);
+const chosenList = ref<boolean | null>(storedList !== null && window.innerWidth >= LIST_MIN_WINDOW ? storedList === '1' : null);
+const listOpen = computed(() => chosenList.value ?? windowWidth.value >= LIST_MIN_WINDOW);
+function toggleList() {
+  chosenList.value = !listOpen.value;
+  writeStore(LIST_KEY, chosenList.value ? '1' : '0');
+}
+const onResize = () => { windowWidth.value = window.innerWidth; };
 const grid = ref(true);
 const zoom = ref<number | 'fit'>('fit');
 const scale = ref(1);
@@ -60,6 +72,8 @@ const { doc, page, pageIndex, selected, selectedId, saveState } = ed;
 
 const preview = usePreviewData(() => app.settings?.allowCommands ?? false);
 const { busy, busyText, publish, exportPdf, scheduleText } = usePushing({ open: doc, flush: () => ed.flush() });
+const reader = useReaderPanel({ hasDoc: computed(() => !!doc.value), selectedId });
+const { on: readerOn, side, work, wide, bind: readerBind } = reader;
 
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
 watch(doc, (d) => {
@@ -250,6 +264,8 @@ function run(cmd: Command): boolean {
     case 'publish': void publish(); return true;
     case 'export': void exportPdf(); return true;
     case 'refresh': void refreshData(); return true;
+    case 'reader': reader.toggle(); return true;
+    case 'readerRefresh': reader.refresh(); return true;
     case 'newPage': ed.addPage(); return true;
     case 'renamePage': if (page.value) void renamePageDialog(page.value.id); return true;
     case 'newDashboard': void createDashboard(); return true;
@@ -279,10 +295,9 @@ function onKey(e: KeyboardEvent) {
 
 const focusFirstField = () => (document.querySelector('.props input, .props textarea, .props select') as HTMLElement | null)?.focus();
 
-watch(listOpen, (open) => writeStore(LIST_KEY, open ? '1' : '0'));
-
 // ---------- lifecycle ----------
 onMounted(async () => {
+  window.addEventListener('resize', onResize);
   await refreshList();
   loading.value = false;
   const last = readStore(LAST_KEY);
@@ -299,6 +314,7 @@ onDeactivated(() => {
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey);
+  window.removeEventListener('resize', onResize);
   clearTimeout(previewTimer);
   void ed.flush();
 });
@@ -327,7 +343,7 @@ onBeforeUnmount(() => {
 
       <div v-if="doc && page" class="editor">
         <div class="strip">
-          <button class="btn ghost icon small" :title="listOpen ? 'Hide the dashboard list' : 'Show the dashboard list'" :aria-label="listOpen ? 'Hide the dashboard list' : 'Show the dashboard list'" :aria-pressed="listOpen" @click="listOpen = !listOpen"><Icon name="panel-left" :size="16" /></button>
+          <button class="btn ghost icon small" :title="listOpen ? 'Hide the dashboard list' : 'Show the dashboard list'" :aria-label="listOpen ? 'Hide the dashboard list' : 'Show the dashboard list'" :aria-pressed="listOpen" @click="toggleList"><Icon name="panel-left" :size="16" /></button>
           <PageTabs :pages="doc.pages" :current-id="page.id" @select="ed.selectPage" @add="ed.addPage()" @rename="renamePageDialog" @duplicate="ed.duplicatePage" @remove="removePage" @move="ed.movePage" />
           <span class="grow"></span>
           <button ref="addButton" class="btn small" title="Add a widget (A)" @click="openPalette()"><Icon name="plus" :size="14" />Add widget</button>
@@ -340,8 +356,10 @@ onBeforeUnmount(() => {
           <button class="btn ghost small zoom num" title="Zoom to fit (Ctrl+0)" aria-label="Zoom to fit" @click="zoomBy('fit')">{{ Math.round(scale * 100) }}%</button>
           <button class="btn ghost icon small" title="Zoom in (Ctrl++)" aria-label="Zoom in" @click="zoomBy('in')"><Icon name="zoom" :size="16" /></button>
           <button class="btn ghost icon small" title="Refresh data, including web addresses and commands (F5)" aria-label="Refresh data" @click="refreshData"><Icon name="refresh" :size="16" /></button>
+          <span class="sep"></span>
+          <button class="btn ghost icon small" :class="{ on: readerOn }" title="Show the reader's screen next to the page (R)" aria-label="Show the reader's screen" :aria-pressed="readerOn" @click="reader.toggle()"><Icon name="device" :size="16" /></button>
         </div>
-        <div class="work">
+        <div ref="work" class="work">
           <StageCanvas
             ref="stage"
             :dashboard="doc"
@@ -360,7 +378,17 @@ onBeforeUnmount(() => {
             @add="openPalette()"
             @edit="focusFirstField"
           />
-          <PropsPanel :ed="ed" :bag="preview.bag.value" :defaults="{ folder: app.settings?.dashboardFolder ?? 'Document/Dashboards', display: app.settings?.displayAfterPush ?? true }" :schedule-text="scheduleText" @fetch="fetchWidget" />
+          <div v-if="readerOn && wide" class="col reader-col">
+            <ReaderPanel v-bind="readerBind" @refresh="reader.refresh()" @reconnect="connectNow()" @close="reader.set(false)" />
+          </div>
+          <div class="col side-col">
+            <div v-if="readerOn && !wide" class="seg panel-switch" role="radiogroup" aria-label="Side panel">
+              <button role="radio" :aria-checked="side === 'props'" :class="{ on: side === 'props' }" @click="side = 'props'">Properties</button>
+              <button role="radio" :aria-checked="side === 'reader'" :class="{ on: side === 'reader' }" @click="side = 'reader'">Reader</button>
+            </div>
+            <ReaderPanel v-if="readerOn && !wide && side === 'reader'" v-bind="readerBind" @refresh="reader.refresh()" @reconnect="connectNow()" @close="reader.set(false)" />
+            <PropsPanel v-else :ed="ed" :bag="preview.bag.value" :defaults="{ folder: app.settings?.dashboardFolder ?? 'Document/Dashboards', display: app.settings?.displayAfterPush ?? true }" :schedule-text="scheduleText" @fetch="fetchWidget" />
+          </div>
         </div>
       </div>
 
@@ -382,6 +410,11 @@ onBeforeUnmount(() => {
 .editor { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .strip { height: 44px; flex: none; display: flex; align-items: center; gap: 4px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
 .work { flex: 1; min-height: 0; display: flex; }
+.col { flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--panel); }
+.side-col { width: clamp(244px, 26vw, 296px); }
+.reader-col { width: 300px; }
+.panel-switch { margin: 10px 12px 0; flex: none; }
+.panel-switch button { flex: 1; padding: 0 6px; }
 .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; flex: none; }
 .btn.on { background: var(--accent-soft); color: var(--accent); }
 .zoom { min-width: 52px; padding: 0 8px; }

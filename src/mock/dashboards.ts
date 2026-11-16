@@ -1,7 +1,7 @@
 // Mock handlers for dashboards, system stats, fetch/run and publishing. (Owned by the dashboard builder.)
 // Dashboards live in memory and in localStorage, so they survive a reload of the browser preview.
 import type { DashboardSummary, PublishMeta, PublishResult, SystemStats } from '../lib/types';
-import { handlers as device } from './device';
+import { handlers as device, showOnMockReader } from './device';
 
 type Doc = { id: string; name: string; updated?: string; [k: string]: unknown };
 
@@ -52,6 +52,27 @@ const sampleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="3
 <rect width="480" height="360" fill="url(#sky)"/><circle cx="360" cy="96" r="44" fill="#fbe9b0"/>
 <path d="M0 300 L120 170 L210 260 L300 150 L480 300 Z" fill="url(#hill)"/><path d="M0 360 V300 H480 V360 Z" fill="#2c3646"/></svg>`;
 
+/** the first published page (8-bit gray) as a PNG data URL the size of the mock reader's screen, like a real screenshot of it */
+function grayPagePng(pixels: Uint8Array, width: number, height: number): string {
+  const full = document.createElement('canvas');
+  full.width = width;
+  full.height = height;
+  const rgba = new ImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    const v = pixels[i];
+    rgba.data[i * 4] = rgba.data[i * 4 + 1] = rgba.data[i * 4 + 2] = v;
+    rgba.data[i * 4 + 3] = 255;
+  }
+  full.getContext('2d')!.putImageData(rgba, 0, 0);
+  const small = document.createElement('canvas');
+  small.width = 825;
+  small.height = Math.round((825 * height) / width);
+  const g = small.getContext('2d')!;
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(full, 0, 0, small.width, small.height);
+  return small.toDataURL('image/png');
+}
+
 export const handlers: Record<string, (a: any) => unknown> = {
   dashboards_list: (): DashboardSummary[] =>
     [...docs.values()].map((d) => ({ id: d.id, name: d.name, updated: d.updated ?? new Date().toISOString() })),
@@ -86,12 +107,16 @@ export const handlers: Record<string, (a: any) => unknown> = {
 
   read_image: () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sampleSvg)}`,
 
-  dashboard_publish: ({ meta, bytes }: { meta: PublishMeta; bytes: number }): PublishResult => ({
-    path: `${meta.folder || 'Document/Dashboards'}/${meta.name}.pdf`,
-    entryId: 'mock-entry',
-    pages: meta.pages.length,
-    bytes: Math.max(20_000, Math.round(bytes / 40)),
-  }),
+  dashboard_publish: ({ meta, pixels }: { meta: PublishMeta; pixels: Uint8Array }): PublishResult => {
+    const first = meta.pages[0];
+    if (meta.display && first) showOnMockReader(grayPagePng(pixels, first.width, first.height));
+    return {
+      path: `${meta.folder || 'Document/Dashboards'}/${meta.name}.pdf`,
+      entryId: 'mock-entry',
+      pages: meta.pages.length,
+      bytes: Math.max(20_000, Math.round(pixels.length / 40)),
+    };
+  },
 
   // the browser build has no file dialog, so the UI never gets as far as asking for this; kept for parity with the desktop commands
   dashboard_export_pdf: () => undefined,

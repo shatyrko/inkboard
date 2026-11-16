@@ -167,7 +167,7 @@ const peek = (w: NonNullable<typeof selected.value>) => {
 </template>
 
 <style scoped>
-.props { width: clamp(244px, 26vw, 296px); flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--panel); }
+.props { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .scroll { padding: 14px 16px 24px; }
 .head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
 .head .ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }

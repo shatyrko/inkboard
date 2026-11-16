@@ -15,6 +15,11 @@ import { ROOT_ID, bigLibrary, documentEntry, folderEntry, newId, seedLibrary } f
 import { mockScreenshot } from './device-screen';
 
 const mode = new URLSearchParams(location.search).get('mock') ?? '';
+
+// what the fake reader shows once a dashboard was pushed to it with "open on the reader" (set by mock/dashboards.ts);
+// until then it shows the book page
+let pushed: string | null = null;
+export function showOnMockReader(png: string) { pushed = png; }
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // 192.0.2.0/24 is reserved for documentation: these addresses never belong to a real network
@@ -170,7 +175,7 @@ export const handlers: Record<string, (a: any) => unknown> = {
 
   // ----- status and settings of the reader -----
   device_status: () => { requireReader(); return status(); },
-  device_screenshot: async () => { requireReader(); await sleep(350); return mockScreenshot(); },
+  device_screenshot: async () => { requireReader(); await sleep(350); return pushed ?? mockScreenshot(); },
   device_config: () => { requireReader(); return { ...config }; },
   device_set_config: async ({ key, value }: { key: ConfigKey; value: string }) => {
     requireReader();

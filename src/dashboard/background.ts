@@ -36,6 +36,8 @@ export function createBackground(deps: BackgroundDeps) {
   const docs = shallowReactive(new Map<string, Dashboard>());
   const busy = ref<Busy | null>(null);
   const changes = ref(0);
+  /** the latest successful push, automatic or manual: what the reader may now be showing */
+  const lastPush = ref<{ id: string; at: number } | null>(null);
   const now = ref(clock());
   /** dashboards whose last automatic push failed: the next failure stays quiet until one succeeds */
   const failing = new Set<string>();
@@ -59,6 +61,7 @@ export function createBackground(deps: BackgroundDeps) {
     try {
       await exclusive(d, (onProgress) => deps.push(d, onProgress));
       failing.delete(id);
+      lastPush.value = { id, at: clock() };
     } catch (e) {
       if (!failing.has(id)) {
         failing.add(id);
@@ -98,6 +101,7 @@ export function createBackground(deps: BackgroundDeps) {
     try {
       const result = await exclusive(d, (onProgress) => deps.push(d, onProgress));
       failing.delete(d.id);
+      lastPush.value = { id: d.id, at: clock() };
       scheduler.record(d.id, true);
       return result;
     } catch (e) {
@@ -128,7 +132,7 @@ export function createBackground(deps: BackgroundDeps) {
     tickClock = undefined;
   }
 
-  return { docs, busy: computed(() => busy.value), put, remove, ensureLoaded, push, exportPdf, scheduleText, start, stop };
+  return { docs, busy: computed(() => busy.value), lastPush: computed(() => lastPush.value), put, remove, ensureLoaded, push, exportPdf, scheduleText, start, stop };
 }
 
 export const background = createBackground({

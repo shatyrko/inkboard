@@ -8,7 +8,7 @@ export type Command =
   | { type: 'order'; how: Order }
   | { type: 'page'; delta: number }
   | { type: 'zoom'; dir: 'in' | 'out' | 'fit' }
-  | { type: 'delete' | 'duplicate' | 'copy' | 'cut' | 'paste' | 'undo' | 'redo' | 'deselect' | 'add' | 'grid' | 'publish' | 'export' | 'refresh' | 'newDashboard' | 'newPage' | 'renamePage' };
+  | { type: 'delete' | 'duplicate' | 'copy' | 'cut' | 'paste' | 'undo' | 'redo' | 'deselect' | 'add' | 'grid' | 'publish' | 'export' | 'refresh' | 'newDashboard' | 'newPage' | 'renamePage' | 'reader' | 'readerRefresh' };
 
 export type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
 
@@ -52,5 +52,6 @@ export function commandForKey(e: KeyLike): Command | null {
   if (e.key === 'PageDown') return { type: 'page', delta: 1 };
   if (!e.shiftKey && k === 'a') return { type: 'add' };
   if (!e.shiftKey && k === 'g') return { type: 'grid' };
+  if (k === 'r') return { type: e.shiftKey ? 'readerRefresh' : 'reader' };
   return null;
 }

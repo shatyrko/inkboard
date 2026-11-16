@@ -41,6 +41,9 @@ describe('commandForKey', () => {
   it('maps view and document shortcuts', () => {
     expect(commandForKey(key('a'))).toEqual({ type: 'add' });
     expect(commandForKey(key('g'))).toEqual({ type: 'grid' });
+    expect(commandForKey(key('r'))).toEqual({ type: 'reader' });
+    expect(commandForKey(key('R', { shiftKey: true }))).toEqual({ type: 'readerRefresh' });
+    expect(commandForKey(key('r', { ctrlKey: true }))).toEqual({ type: 'refresh' });
     expect(commandForKey(key('0', { ctrlKey: true }))).toEqual({ type: 'zoom', dir: 'fit' });
     expect(commandForKey(key('=', { ctrlKey: true }))).toEqual({ type: 'zoom', dir: 'in' });
     expect(commandForKey(key('-', { ctrlKey: true }))).toEqual({ type: 'zoom', dir: 'out' });
