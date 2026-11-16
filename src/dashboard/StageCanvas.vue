@@ -84,11 +84,12 @@ watch(view, () => { clearTimeout(timer); timer = undefined; void render(); });
 // ---------- sizing ----------
 let observer: ResizeObserver | undefined;
 onMounted(() => {
-  observer = new ResizeObserver(() => {
+  // measured on the next frame: resizing inside the callback itself can trigger "ResizeObserver loop" errors
+  observer = new ResizeObserver(() => requestAnimationFrame(() => {
     const el = scroller.value;
     // a view that is switched away from reports 0 x 0: keep the last real size instead of shrinking the preview
     if (el && el.clientWidth > 0) room.value = { width: el.clientWidth, height: el.clientHeight };
-  });
+  }));
   if (scroller.value) { observer.observe(scroller.value); room.value = { width: scroller.value.clientWidth, height: scroller.value.clientHeight }; }
   void render();
 });

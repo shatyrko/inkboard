@@ -35,10 +35,11 @@ const updated = computed(() => (props.updatedAt === null ? '' : new Date(props.u
 
 let observer: ResizeObserver | undefined;
 onMounted(() => {
-  observer = new ResizeObserver(() => {
+  // measured on the next frame: resizing inside the callback itself can trigger "ResizeObserver loop" errors
+  observer = new ResizeObserver(() => requestAnimationFrame(() => {
     const el = stage.value;
     if (el && el.clientWidth > 0) room.value = { width: el.clientWidth, height: el.clientHeight };
-  });
+  }));
   if (stage.value) observer.observe(stage.value);
 });
 onBeforeUnmount(() => observer?.disconnect());
