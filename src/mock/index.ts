@@ -2,9 +2,10 @@
 // in a plain browser (and can be screenshotted). Nothing here ever touches a real device.
 import { handlers as device } from './device';
 import { handlers as dashboards } from './dashboards';
+import { handlers as mtp } from './mtp';
 
 type Handler = (args: any) => unknown | Promise<unknown>;
-const all: Record<string, Handler> = { ...device, ...dashboards };
+const all: Record<string, Handler> = { ...device, ...dashboards, ...mtp };
 
 export async function handle(cmd: string, args: Record<string, unknown>): Promise<unknown> {
   const fn = all[cmd];

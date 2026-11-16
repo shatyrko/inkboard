@@ -108,6 +108,8 @@ export type PublishMeta = {
   display: boolean;
   /** one entry per page; the body carries the 8-bit grayscale pixels of every page, concatenated, row-major */
   pages: PublishPage[];
+  /** where to publish; omitted means the paired Digital Paper */
+  target?: PublishTarget;
 };
 export type PublishResult = { path: string; entryId: string; pages: number; bytes: number };
 
@@ -120,3 +122,45 @@ export type AppSettings = {
   /** open the dashboard on the reader's screen right after uploading it */
   displayAfterPush: boolean;
 };
+
+// ---------- readers (more than one device) ----------
+/** 'digital-paper': a Sony DPT-RP1/CP1 over Wi-Fi (paired). 'mtp': an Android e-reader or tablet (Boox, Kindle, ...) over USB. */
+export type ReaderKind = 'digital-paper' | 'mtp';
+export type Reader = {
+  /** 'dpt' for the paired Digital Paper, 'mtp:<hash>' for a USB device (stable while it stays plugged in) */
+  id: string;
+  kind: ReaderKind;
+  /** what to call it: "DPT-RP1", "Tab X C" */
+  name: string;
+  /** manufacturer: "Sony", "ONYX" */
+  maker: string;
+  /** reachable right now (Wi-Fi session alive / USB device present) */
+  connected: boolean;
+  link: 'wifi' | 'usb';
+};
+
+// ---------- MTP readers (files over USB) ----------
+export type MtpStorage = { id: number; name: string; total: number; free: number };
+export type MtpStatus = {
+  id: string;
+  maker: string;
+  /** product name as the device reports it, e.g. "TabXC" */
+  model: string;
+  /** friendly name when it has one, e.g. "Tab X C"; falls back to the model */
+  name: string;
+  storages: MtpStorage[];
+  /** "High speed (480 Mbit/s)", "SuperSpeed (5 Gbit/s)", ... when the OS reports it */
+  usbSpeed: string | null;
+};
+export type MtpEntry = {
+  handle: number;
+  name: string;
+  kind: 'file' | 'folder';
+  size: number;
+  /** ISO 8601 or null when the device does not say */
+  modified: string | null;
+};
+/** Where a dashboard is published when the target is a USB reader. */
+export type PublishTarget =
+  | { kind: 'dpt' }
+  | { kind: 'mtp'; readerId: string; /** folder on the device storage; empty = default for the format */ folder: string; format: 'pdf' | 'png' };

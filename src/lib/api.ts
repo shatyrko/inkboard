@@ -2,8 +2,8 @@
 // so the UI can be developed and screenshotted without the desktop shell or a reader.
 import { inTauri } from './window';
 import type {
-  AppSettings, ConfigKey, ConnectionState, DashboardSummary, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, ProbeResult, PublishMeta,
-  PublishResult, SystemStats, TemplateEntry, TransferProgress, UploadResult, WifiConnectRequest, WifiNetwork, WifiScanResult,
+  AppSettings, ConfigKey, ConnectionState, DashboardSummary, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, MtpEntry, MtpStatus, ProbeResult,
+  PublishMeta, PublishResult, Reader, SystemStats, TemplateEntry, TransferProgress, UploadResult, WifiConnectRequest, WifiNetwork, WifiScanResult,
 } from './types';
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -28,7 +28,23 @@ export const api = {
   connect: () => call<ConnectionState>('connect'),
   forgetDevice: () => call<ConnectionState>('forget_device'),
 
-  // status and settings of the reader
+  // all readers: the paired Digital Paper (if any) and every MTP device on USB right now
+  readersList: () => call<Reader[]>('readers_list'),
+
+  // USB readers over MTP (Boox and other Android e-readers). `id` is Reader.id; `storage` is MtpStorage.id; `parent` null = the storage root.
+  mtpStatus: (id: string) => call<MtpStatus>('mtp_status', { id }),
+  mtpList: (id: string, storage: number, parent: number | null) => call<MtpEntry[]>('mtp_list', { id, storage, parent }),
+  /** uploads local files into a folder; progress arrives as `transfer-progress` events */
+  mtpUpload: (id: string, storage: number, parent: number | null, paths: string[]) => call<UploadResult[]>('mtp_upload', { id, storage, parent, paths }),
+  mtpDownload: (id: string, storage: number, handle: number, dest: string) => call<void>('mtp_download', { id, storage, handle, dest }),
+  /** deletes a file or a folder with everything in it */
+  mtpDelete: (id: string, storage: number, handle: number) => call<void>('mtp_delete', { id, storage, handle }),
+  /** returns the new folder's handle */
+  mtpNewFolder: (id: string, storage: number, parent: number | null, name: string) => call<number>('mtp_new_folder', { id, storage, parent, name }),
+  mtpRename: (id: string, storage: number, handle: number, name: string) => call<void>('mtp_rename', { id, storage, handle, name }),
+  mtpMove: (id: string, storage: number, handle: number, parent: number | null) => call<void>('mtp_move', { id, storage, handle, parent }),
+
+  // status and settings of the Digital Paper
   deviceStatus: () => call<DeviceStatus>('device_status'),
   /** PNG data URL of what the reader is showing right now */
   screenshot: () => call<string>('device_screenshot'),

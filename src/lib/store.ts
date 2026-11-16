@@ -1,7 +1,7 @@
 // App-wide state: which view is shown, the reader connection, app settings and the theme.
 import { reactive } from 'vue';
 import { api } from './api';
-import type { AppSettings, ConnectionState } from './types';
+import type { AppSettings, ConnectionState, Reader } from './types';
 
 export type ViewName = 'device' | 'library' | 'dashboards' | 'settings';
 
@@ -23,7 +23,29 @@ export const app = reactive({
   /** last connection error, shown with a Retry button */
   connectError: '' as string,
   settings: null as AppSettings | null,
+  /** every reader known right now: the paired Digital Paper and the USB devices that are plugged in */
+  readers: [] as Reader[],
+  /** Reader.id of the reader the views show; remembered between runs */
+  reader: readStored('inkboard.reader') || 'dpt',
 });
+
+function readStored(key: string): string {
+  try { return localStorage.getItem(key) ?? ''; } catch { return ''; }
+}
+
+/** the reader the views are about; falls back to the first known one when the remembered reader is gone */
+export function activeReader(): Reader | null {
+  return app.readers.find((r) => r.id === app.reader) ?? app.readers[0] ?? null;
+}
+
+export function selectReader(id: string) {
+  app.reader = id;
+  try { localStorage.setItem('inkboard.reader', id); } catch { /* storage can be unavailable */ }
+}
+
+export async function refreshReaders(): Promise<void> {
+  app.readers = await api.readersList();
+}
 
 export async function refreshConnection(): Promise<void> {
   app.conn = await api.connectionState();
