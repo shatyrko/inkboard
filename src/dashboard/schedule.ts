@@ -27,8 +27,8 @@ export class PushScheduler {
       now?: () => number;
       tickMs?: number;
       onChange?: () => void;
-      /** when it says no, a tick does nothing: due jobs stay due and run at the first tick that says yes */
-      canRun?: () => boolean;
+      /** asked per due job: when it says no the job is skipped quietly and stays due, so it runs at the first tick that says yes */
+      canRun?: (id: string) => boolean;
     } = {},
   ) {}
 
@@ -63,8 +63,7 @@ export class PushScheduler {
   }
 
   async tick(): Promise<void> {
-    if (this.opts.canRun && !this.opts.canRun()) return;
-    const due = [...this.jobs.values()].filter((s) => isDue(s, this.now()));
+    const due = [...this.jobs.values()].filter((s) => isDue(s, this.now()) && (this.opts.canRun?.(s.id) ?? true));
     await Promise.all(due.map(async (s) => {
       s.running = true;
       this.opts.onChange?.();

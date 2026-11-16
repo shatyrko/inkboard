@@ -1,12 +1,13 @@
 // The Publish and Export PDF buttons: flush pending edits, run the job through the background lock, report with toasts.
 import { computed, ref, type Ref } from 'vue';
 import { pickSavePath } from '../lib/api';
-import { fmtBytes } from '../lib/format';
+import { app } from '../lib/store';
 import { attempt, notify } from '../lib/ui';
 import { inTauri } from '../lib/window';
 import { background } from './background';
 import type { Dashboard } from './model';
 import { describeProgress, safeDocName } from './publish';
+import { describePushed, isTargetReachable, targetName, targetOf } from './publish-target';
 
 type Deps = {
   /** the dashboard open in the editor, with its unsaved edits */
@@ -27,11 +28,17 @@ export function usePushing({ open, flush }: Deps) {
   async function publish() {
     const d = open.value;
     if (!d || busy.value) return;
+    // a USB reader that is not plugged in cannot be written to: say so, rather than let the upload fail
+    if (targetOf(d).kind === 'mtp' && !isTargetReachable(targetOf(d), app.readers, !!app.conn?.connected)) {
+      notify(`${targetName(d, app.readers)} is not connected. Plug it in and try again.`, 'error');
+      return;
+    }
     working.value = true;
     try {
       await flush();
-      const result = await attempt(() => background.push(open.value ?? d), 'Could not publish');
-      if (result) notify(`Published "${d.name}" to ${result.path} (${result.pages} ${result.pages === 1 ? 'page' : 'pages'}, ${fmtBytes(result.bytes)})`);
+      const latest = open.value ?? d;
+      const result = await attempt(() => background.push(latest), 'Could not publish');
+      if (result) notify(describePushed(latest, result, app.readers));
     } finally {
       working.value = false;
     }

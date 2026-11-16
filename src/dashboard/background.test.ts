@@ -18,7 +18,7 @@ function setup(over: Partial<BackgroundDeps> = {}) {
     loadAll: async () => [],
     push,
     exportPdf: vi.fn(async () => {}),
-    isConnected: () => connected,
+    isReachable: () => connected,
     onScheduledFailure,
     now: () => t,
     tickMs: TICK,
@@ -123,6 +123,23 @@ describe('lastPush', () => {
     expect(bg.lastPush.value).toBe(first);
     await bg.push(d);
     expect(bg.lastPush.value).not.toBe(first);
+    bg.stop();
+  });
+});
+
+describe('per-reader reachability', () => {
+  it('skips a dashboard whose reader is gone while another one is pushed', async () => {
+    let usbPlugged = false;
+    const { bg, push, pass } = setup({ isReachable: (d) => d.name !== 'Usb' || usbPlugged });
+    const dpt = scheduled('Wall');
+    const usb = scheduled('Usb');
+    bg.put(dpt);
+    bg.put(usb);
+    await pass(5);
+    expect(push.mock.calls.map((c) => c[0].name)).toEqual(['Wall']);
+    usbPlugged = true;
+    await pass(0);
+    expect(push.mock.calls.map((c) => c[0].name)).toEqual(['Wall', 'Usb']);
     bg.stop();
   });
 });

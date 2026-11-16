@@ -23,7 +23,7 @@ async function run(fn: () => Promise<unknown>, failure: string): Promise<boolean
 }
 
 /** asks for a name until it is valid, explaining what was wrong in the dialog itself */
-async function askName(o: { title: string; label: string; confirm: string; value?: string; suffix?: string; taken: string[] }): Promise<string | null> {
+export async function askName(o: { title: string; label: string; confirm: string; value?: string; suffix?: string; taken: string[] }): Promise<string | null> {
   let value = o.value ?? '';
   let problem = '';
   for (;;) {

@@ -4,7 +4,7 @@ import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMoun
 import Icon from '../components/Icon.vue';
 import PageBar from '../components/PageBar.vue';
 import { menu, type MenuItem } from '../lib/contextmenu';
-import { app, connectNow } from '../lib/store';
+import { app, connectNow, refreshReaders } from '../lib/store';
 import type { DashboardSummary } from '../lib/types';
 import { askDialog, attempt, chooseDialog, confirmDialog, dialog, notify } from '../lib/ui';
 import DashboardList from '../dashboard/DashboardList.vue';
@@ -12,6 +12,7 @@ import { hasClipboard, useEditor } from '../dashboard/editor';
 import { commandForKey, type Command } from '../dashboard/keys';
 import { byName, createFromSample, deleteDashboard, duplicateDashboard, listDashboards, loadDashboard, saveDashboard } from '../dashboard/library';
 import type { Widget, WidgetType } from '../dashboard/model';
+import { targetOf } from '../dashboard/publish-target';
 import PageTabs from '../dashboard/PageTabs.vue';
 import { usePreviewData } from '../dashboard/preview-data';
 import PropsPanel from '../dashboard/PropsPanel.vue';
@@ -72,7 +73,7 @@ const { doc, page, pageIndex, selected, selectedId, saveState } = ed;
 
 const preview = usePreviewData(() => app.settings?.allowCommands ?? false);
 const { busy, busyText, publish, exportPdf, scheduleText } = usePushing({ open: doc, flush: () => ed.flush() });
-const reader = useReaderPanel({ hasDoc: computed(() => !!doc.value), selectedId });
+const reader = useReaderPanel({ hasDoc: computed(() => !!doc.value), selectedId, target: computed(() => targetOf(doc.value)) });
 const { on: readerOn, side, work, wide, bind: readerBind } = reader;
 
 let previewTimer: ReturnType<typeof setTimeout> | undefined;
@@ -306,6 +307,8 @@ onMounted(async () => {
 });
 onActivated(() => {
   window.addEventListener('keydown', onKey);
+  // the "Publish to" list should show the readers that are plugged in now
+  void refreshReaders().catch(() => {});
   if (doc.value) void preview.load(doc.value, { force: true });
 });
 onDeactivated(() => {

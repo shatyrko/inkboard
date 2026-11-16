@@ -314,25 +314,61 @@ fn file_stream(file: tokio::fs::File) -> impl futures_util::Stream<Item = Result
     }))
 }
 
-async fn upload_path<R: Runtime>(st: &Storage, app: &AppHandle<R>, parent: Option<ObjectHandle>, path: &Path) -> Result<(), String> {
-    let name = path.file_name().and_then(|n| n.to_str()).ok_or("The file name is not valid text.")?.to_string();
-    let file = tokio::fs::File::open(path).await.map_err(|e| format!("Could not read the file: {e}"))?;
-    let len = file.metadata().await.map_err(|e| e.to_string())?.len();
-    // a file of the same name is replaced instead of duplicated
-    if let Ok(existing) = st.list_objects(parent).await {
-        if let Some(old) = existing.iter().find(|o| !o.is_folder() && o.filename == name) {
-            st.delete(old.handle).await.map_err(fmt_err)?;
+/// Why one upload attempt failed: something local (file unreadable) or something the reader said.
+enum Fail {
+    Local(String),
+    Mtp(mtp_rs::Error),
+}
+
+impl Fail {
+    fn message(self) -> String {
+        match self {
+            Fail::Local(m) => m,
+            Fail::Mtp(e) => fmt_err(e),
         }
     }
-    let mut progress = Progress::new(app, &name, "up", len);
-    let result = st
-        .upload_with_progress(parent, NewObjectInfo::file(name.clone(), len), file_stream(file), |p| {
-            progress.tick(p.bytes_transferred);
-            std::ops::ControlFlow::Continue(())
-        })
-        .await
-        .map(|_| ())
-        .map_err(|e| fmt_err(e.source));
+    fn is_stale(&self) -> bool {
+        matches!(self, Fail::Mtp(mtp_rs::Error::StaleHandle))
+    }
+}
+
+/// How often an operation is tried when the reader says a handle went stale.
+const STALE_RETRIES: usize = 4;
+
+/// Android re-keys object handles after a media rescan, which can invalidate one mid-operation (and a rescan can follow our own
+/// upload). The documented cure is to list again and retry, after a short pause so the rescan can finish.
+async fn upload_once<R: Runtime>(st: &Storage, parent: Option<ObjectHandle>, path: &Path, name: &str, progress: &mut Progress<'_, R>) -> Result<(), Fail> {
+    let file = tokio::fs::File::open(path).await.map_err(|e| Fail::Local(format!("Could not read the file: {e}")))?;
+    let len = file.metadata().await.map_err(|e| Fail::Local(e.to_string()))?.len();
+    progress.total = len;
+    // a file of the same name is replaced instead of duplicated
+    if let Some(old) = st.list_objects(parent).await.map_err(Fail::Mtp)?.iter().find(|o| !o.is_folder() && o.filename == name) {
+        st.delete(old.handle).await.map_err(Fail::Mtp)?;
+    }
+    st.upload_with_progress(parent, NewObjectInfo::file(name.to_string(), len), file_stream(file), |p| {
+        progress.tick(p.bytes_transferred);
+        std::ops::ControlFlow::Continue(())
+    })
+    .await
+    .map(|_| ())
+    .map_err(|e| Fail::Mtp(e.source))
+}
+
+async fn upload_path<R: Runtime>(st: &Storage, app: &AppHandle<R>, parent: Option<ObjectHandle>, path: &Path) -> Result<(), String> {
+    let name = path.file_name().and_then(|n| n.to_str()).ok_or("The file name is not valid text.")?.to_string();
+    if !path.is_file() {
+        return Err("That is a folder or not a regular file; only files can be uploaded.".into());
+    }
+    let mut progress = Progress::new(app, &name, "up", 0);
+    let mut result = upload_once(st, parent, path, &name, &mut progress).await;
+    for attempt in 1..STALE_RETRIES {
+        if !matches!(&result, Err(f) if f.is_stale()) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(200 * attempt as u64)).await;
+        result = upload_once(st, parent, path, &name, &mut progress).await;
+    }
+    let result = result.map_err(Fail::message);
     progress.finish(&result);
     result
 }
@@ -444,6 +480,19 @@ async fn ensure_path(st: &Storage, path: &str) -> Result<Option<ObjectHandle>, m
     Ok(parent)
 }
 
+async fn put_one(st: &Storage, folder: &str, name: &str, data: &[u8]) -> Result<(), mtp_rs::Error> {
+    let parent = ensure_path(st, folder).await?;
+    if let Some(old) = st.list_objects(parent).await?.iter().find(|o| !o.is_folder() && o.filename == name) {
+        st.delete(old.handle).await?;
+    }
+    let len = data.len() as u64;
+    let body = Box::pin(stream::once({
+        let data = Bytes::copy_from_slice(data);
+        async move { Ok::<Bytes, std::io::Error>(data) }
+    }));
+    st.upload(parent, NewObjectInfo::file(name.to_string(), len), body).await.map(|_| ()).map_err(|e| e.source)
+}
+
 /// Writes finished dashboard files (already encoded) into `folder` on the reader's main storage, replacing same-named files.
 /// Returns the folder path used.
 pub async fn put_files(state: &AppState, reader_id: &str, folder: &str, files: Vec<(String, Vec<u8>)>) -> CmdResult<String> {
@@ -452,14 +501,17 @@ pub async fn put_files(state: &AppState, reader_id: &str, folder: &str, files: V
     let st = storages.into_iter().next().ok_or("The reader has no storage.")?;
     let folder = folder.trim().trim_matches('/').to_string();
     let result: Result<(), mtp_rs::Error> = async {
-        let parent = ensure_path(&st, &folder).await?;
         for (name, data) in files {
-            if let Some(old) = st.list_objects(parent).await?.iter().find(|o| !o.is_folder() && o.filename == name) {
-                st.delete(old.handle).await?;
+            let mut attempt = 0;
+            loop {
+                match put_one(&st, &folder, &name, &data).await {
+                    Err(mtp_rs::Error::StaleHandle) if attempt + 1 < STALE_RETRIES => {
+                        attempt += 1; // see upload_once: pause, list again, retry
+                        tokio::time::sleep(Duration::from_millis(200 * attempt as u64)).await;
+                    }
+                    other => break other?,
+                }
             }
-            let len = data.len() as u64;
-            let body = Box::pin(stream::once(async move { Ok::<Bytes, std::io::Error>(Bytes::from(data)) }));
-            st.upload(parent, NewObjectInfo::file(name, len), body).await.map_err(|e| e.source)?;
         }
         Ok(())
     }

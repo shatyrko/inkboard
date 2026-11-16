@@ -1,14 +1,18 @@
 <script setup lang="ts">
-// First run: find the reader, then pair with the PIN it shows on its own screen. Takes the whole window.
+// Find the Digital Paper, then pair with the PIN it shows on its own screen. Takes the whole window: as the first-run
+// screen while there is no reader at all, or as an overlay (`overlay`) on top of the app to add a Digital Paper later.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import { api } from '../lib/api';
-import { app, connectNow, refreshConnection } from '../lib/store';
+import { app, connectNow, refreshConnection, refreshReaders, selectReader } from '../lib/store';
 import type { DiscoveredDevice } from '../lib/types';
 import { digitsOnly, normaliseAddress } from './connect/address';
 
 type Reader = { addr: string; model: string; serial: string | null };
+
+const props = defineProps<{ overlay?: boolean }>();
+const emit = defineEmits<{ close: [] }>();
 
 const message = (e: unknown) => (typeof e === 'string' ? e : (e as Error)?.message || 'Something went wrong.');
 
@@ -107,9 +111,13 @@ function onPin(e: Event) {
   el.value = pin.value; // a rejected character must not stay visible
 }
 
-/** once the keys are saved the shell swaps this view for the main UI, so nothing here may depend on staying mounted */
+/** Once the keys are saved the Digital Paper is in the readers list: the shell swaps this view for the main UI (or this
+ *  overlay closes) and shows it. Nothing here may depend on staying mounted. */
 async function enter() {
   await refreshConnection();
+  await refreshReaders();
+  selectReader('dpt');
+  emit('close');
   await connectNow();
 }
 
@@ -143,7 +151,9 @@ async function importKeys() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && step.value === 2 && !busy.value) back();
+  if (e.key !== 'Escape' || busy.value) return;
+  if (step.value === 2) back();
+  else if (props.overlay) emit('close');
 }
 
 onMounted(() => {
@@ -154,13 +164,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 </script>
 
 <template>
-  <section class="connect">
+  <section class="connect" :class="{ overlay }">
     <div class="strip" data-drag></div>
     <div class="scroll">
       <div class="wrap">
         <div class="hero">
           <Logo :size="52" class="brand-mark" />
-          <h1>Connect your reader</h1>
+          <h1>{{ overlay ? 'Add a Digital Paper' : 'Connect your reader' }}</h1>
           <p>Inkboard manages a Sony Digital Paper (DPT-RP1) over Wi-Fi and turns it into a dashboard screen.</p>
         </div>
 
@@ -173,6 +183,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <!-- ===== step 1 ===== -->
         <template v-if="step === 1">
           <div class="note"><Icon name="wifi" :size="16" /><span>The reader's Wi-Fi must be switched on, and the reader and this computer must be on the <b>same Wi-Fi network</b>.</span></div>
+          <div v-if="overlay && app.conn?.configured" class="note warn"><Icon name="info" :size="16" /><span>Only one Digital Paper can be paired at a time. Pairing another one replaces the current one.</span></div>
 
           <div class="card">
             <div class="row head">
@@ -206,9 +217,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
           </div>
 
           <div class="actions">
+            <button v-if="overlay" class="btn" @click="emit('close')">Cancel</button>
             <span class="grow"></span>
             <button class="btn primary" :disabled="!chosen" @click="next">Continue<Icon name="arrow-right" :size="16" /></button>
           </div>
+
+          <p v-if="!overlay" class="usb"><Icon name="usb" :size="16" /><span>Or plug in a USB reader (a Boox or another Android e-reader): it appears here by itself.</span></p>
         </template>
 
         <!-- ===== step 2 ===== -->
@@ -262,6 +276,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 <style scoped>
 .connect { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* on top of the app (below dialogs, menus and the window controls) */
+.connect.overlay { position: fixed; inset: 0; z-index: 40; background: var(--bg); }
 .strip { position: absolute; top: 0; left: 0; right: 0; height: var(--bar); z-index: 1; }
 .scroll { padding-top: var(--bar); }
 /* top-aligned, so the card does not jump when the second step is taller than the first */
@@ -283,6 +299,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 
 .note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; margin-bottom: 14px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); font-size: 13px; }
 .note svg { color: var(--accent); flex: none; margin-top: 1px; }
+.note.warn { background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.note.warn svg { color: var(--warn); }
+.usb { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 22px 0 0; color: var(--faint); font-size: 13px; text-align: center; }
+.usb svg { flex: none; }
 
 .head { margin-bottom: 12px; }
 .head h2 { font-size: 15px; margin: 0; }

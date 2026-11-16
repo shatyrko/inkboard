@@ -1,7 +1,7 @@
 // Everything that happens to dashboards without the Dashboards view: the loaded documents, the one-at-a-time push lock,
 // and the automatic pushes. It is a singleton started from App.vue, so a schedule fires whichever view is showing,
 // even if the Dashboards view was never opened. The view reads its state (busy, "Next push in ...") and feeds it edits.
-import { computed, ref, shallowReactive } from 'vue';
+import { computed, ref, shallowReactive, watch } from 'vue';
 import { api } from '../lib/api';
 import { app } from '../lib/store';
 import type { PublishResult } from '../lib/types';
@@ -9,6 +9,7 @@ import { notify } from '../lib/ui';
 import { listDashboards, loadDashboard } from './library';
 import type { Dashboard } from './model';
 import { publishDashboard, exportDashboardPdf, type Progress } from './publish';
+import { isTargetReachable, targetOf } from './publish-target';
 import { PushScheduler, describeSchedule } from './schedule';
 
 export type Busy = { id: string; progress: Progress };
@@ -19,8 +20,8 @@ export type BackgroundDeps = {
   loadAll: () => Promise<Dashboard[]>;
   push: (d: Dashboard, onProgress: (p: Progress) => void) => Promise<PublishResult>;
   exportPdf: (d: Dashboard, dest: string, onProgress: (p: Progress) => void) => Promise<void>;
-  /** automatic pushes only run while this is true */
-  isConnected: () => boolean;
+  /** whether a push of this dashboard can go out now (its target reader is reachable); automatic pushes skip it quietly when not */
+  isReachable: (d: Dashboard) => boolean;
   /** called once per failing streak of automatic pushes, not on every failed attempt */
   onScheduledFailure: (d: Dashboard, message: string) => void;
   now?: () => number;
@@ -69,7 +70,12 @@ export function createBackground(deps: BackgroundDeps) {
       }
       throw e;
     }
-  }, { now: clock, tickMs: deps.tickMs, onChange: () => { changes.value++; now.value = clock(); }, canRun: deps.isConnected });
+  }, {
+    now: clock,
+    tickMs: deps.tickMs,
+    onChange: () => { changes.value++; now.value = clock(); },
+    canRun: (id) => { const d = docs.get(id); return !!d && deps.isReachable(d); },
+  });
 
   /** makes the schedule match the dashboards' own settings */
   function syncJobs() {
@@ -145,10 +151,14 @@ export const background = createBackground({
   },
   push: async (d, onProgress) => publishDashboard(d, { settings: await currentSettings(), onProgress }),
   exportPdf: async (d, dest, onProgress) => exportDashboardPdf(d, dest, { settings: await currentSettings(), onProgress }),
-  isConnected: () => !!app.conn?.connected,
+  isReachable: (d) => isTargetReachable(targetOf(d), app.readers, !!app.conn?.connected),
   onScheduledFailure: (d, message) => notify(`Automatic push of "${d.name}" failed: ${message}. It will try again.`, 'error'),
 });
 
 async function currentSettings() {
   return app.settings ?? (await api.settingsGet());
 }
+
+// App.vue starts the schedule when the Digital Paper connects; a USB reader has no session to wait for, so the schedule
+// also starts as soon as any reader is reachable (start() is safe to call twice)
+watch(() => !!app.conn?.connected || app.readers.some((r) => r.connected), (any) => { if (any) background.start(); }, { immediate: true });

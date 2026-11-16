@@ -1,9 +1,9 @@
 // Actions on the paired reader that more than one view offers.
 import { api } from '../../lib/api';
-import { refreshConnection } from '../../lib/store';
+import { refreshConnection, refreshReaders } from '../../lib/store';
 import { attempt, confirmDialog } from '../../lib/ui';
 
-/** Drops the saved keys; the shell then shows the connect flow again. */
+/** Drops the saved keys. The Digital Paper leaves the readers list: the shell shows another reader, or the connect flow if there is none. */
 export async function forgetReader(): Promise<void> {
   const ok = await confirmDialog({
     title: 'Forget this reader?',
@@ -14,5 +14,6 @@ export async function forgetReader(): Promise<void> {
   await attempt(async () => {
     await api.forgetDevice();
     await refreshConnection();
+    await refreshReaders();
   }, 'Could not forget the reader');
 }

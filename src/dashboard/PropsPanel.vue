@@ -2,10 +2,13 @@
 // The right-hand sidebar: the selected widget's properties, or (with nothing selected) the page and dashboard settings.
 import { computed } from 'vue';
 import Icon from '../components/Icon.vue';
+import { capabilities } from '../lib/readers';
+import { app } from '../lib/store';
 import type { DataBag } from './data';
 import type { Editor } from './editor';
 import FieldForm from './FieldForm.vue';
 import { clamp } from './grid';
+import { defaultFolder, retarget, targetOf, targetOptions, targetReaderId } from './publish-target';
 import { drawOrder, sourceOf } from './render';
 import { registry } from './widgets';
 
@@ -23,6 +26,20 @@ const { doc, page, selected, bounds } = props.ed;
 const def = computed(() => (selected.value ? registry[selected.value.type] : null));
 const layers = computed(() => (page.value ? drawOrder(page.value.widgets).reverse() : []));
 const schedule = computed(() => doc.value?.schedule ?? { enabled: false, everyMinutes: 30 });
+
+// ---------- where the dashboard is published ----------
+const target = computed(() => targetOf(doc.value));
+const readerOptions = computed(() => targetOptions(app.readers, target.value, { rememberedName: doc.value?.publish?.targetName, dptConnected: !!app.conn?.connected }));
+const formats = capabilities('mtp').dashboardFormats;
+const FORMAT_LABEL = { pdf: 'PDF', png: 'PNG per page' };
+
+function chooseReader(id: string) {
+  props.ed.setPublish({ ...doc.value?.publish, ...retarget(id, app.readers, target.value) });
+}
+function patchUsbTarget(patch: { folder?: string; format?: 'pdf' | 'png' }) {
+  const t = target.value;
+  if (t.kind === 'mtp') props.ed.setPublish({ ...doc.value?.publish, target: { ...t, ...patch } });
+}
 
 /** how the selected widget's data is doing, for the line under its settings */
 const status = computed(() => {
@@ -121,16 +138,41 @@ const peek = (w: NonNullable<typeof selected.value>) => {
       <div class="section-label">Publishing</div>
       <div class="form">
         <div class="field">
-          <label for="d-folder">Folder on the reader</label>
-          <input id="d-folder" class="input selectable mono" :value="doc.publish?.folder ?? ''" :placeholder="defaults.folder" spellcheck="false" autocomplete="off" @input="ed.setPublish({ ...doc.publish, folder: ($event.target as HTMLInputElement).value })" />
-          <div class="hint">Empty uses the folder from Settings.</div>
+          <label for="d-reader">Publish to</label>
+          <select id="d-reader" class="select" :value="targetReaderId(target)" @change="chooseReader(($event.target as HTMLSelectElement).value)">
+            <option v-for="o in readerOptions" :key="o.id" :value="o.id">{{ o.label }}</option>
+          </select>
         </div>
-        <div class="field">
-          <div class="row">
-            <label for="d-display" class="grow sw-label">Open on the reader after pushing</label>
-            <button id="d-display" class="switch" role="switch" :aria-checked="doc.publish?.display ?? defaults.display" aria-label="Open on the reader after pushing" @click="ed.setPublish({ ...doc.publish, display: !(doc.publish?.display ?? defaults.display) })"></button>
+
+        <template v-if="target.kind === 'mtp'">
+          <div class="field">
+            <span class="lbl">Format</span>
+            <div class="seg" role="radiogroup" aria-label="File format">
+              <button v-for="f in formats" :key="f" role="radio" :aria-checked="target.format === f" :class="{ on: target.format === f }" @click="patchUsbTarget({ format: f })">{{ FORMAT_LABEL[f] }}</button>
+            </div>
+            <div class="hint">{{ target.format === 'png' ? 'One image per page. Page links do not work in images.' : 'One file with every page. Page links work.' }}</div>
           </div>
-        </div>
+          <div class="field">
+            <label for="d-usb-folder">Folder on the device</label>
+            <input id="d-usb-folder" class="input selectable mono" :value="target.folder" :placeholder="defaultFolder(target.format)" spellcheck="false" autocomplete="off" @input="patchUsbTarget({ folder: ($event.target as HTMLInputElement).value })" />
+            <div class="hint">Empty uses {{ defaultFolder(target.format) }}.</div>
+          </div>
+          <p class="hint quiet">Open the file from the reader's own file app.</p>
+        </template>
+
+        <template v-else>
+          <div class="field">
+            <label for="d-folder">Folder on the reader</label>
+            <input id="d-folder" class="input selectable mono" :value="doc.publish?.folder ?? ''" :placeholder="defaults.folder" spellcheck="false" autocomplete="off" @input="ed.setPublish({ ...doc.publish, folder: ($event.target as HTMLInputElement).value })" />
+            <div class="hint">Empty uses the folder from Settings.</div>
+          </div>
+          <div class="field">
+            <div class="row">
+              <label for="d-display" class="grow sw-label">Open on the reader after pushing</label>
+              <button id="d-display" class="switch" role="switch" :aria-checked="doc.publish?.display ?? defaults.display" aria-label="Open on the reader after pushing" @click="ed.setPublish({ ...doc.publish, display: !(doc.publish?.display ?? defaults.display) })"></button>
+            </div>
+          </div>
+        </template>
         <div class="field">
           <div class="row">
             <label for="d-auto" class="grow sw-label">Push automatically</label>
@@ -176,8 +218,9 @@ const peek = (w: NonNullable<typeof selected.value>) => {
 .sw-label { font-size: 13px; color: var(--text); font-weight: 400; }
 .mono { font-family: var(--mono); font-size: 12px; }
 .seg { width: 100%; }
-.seg button { flex: 1; padding: 0 6px; }
+.seg button { flex: 1; padding: 0 4px; white-space: nowrap; }
 .every { margin-top: 2px; }
+.quiet { margin: 0; }
 .every .input { width: 76px; }
 .fetch { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
 .status { font-size: 12px; color: var(--faint); margin: 10px 0 0; overflow-wrap: anywhere; }

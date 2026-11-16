@@ -9,7 +9,7 @@ const DONE_VISIBLE_MS = 2500;
 
 async function listen(cb: (p: TransferProgress) => void): Promise<() => void> {
   if (inTauri) return onTransfer(cb);
-  const { listenMockTransfers } = await import('../../mock/device');
+  const { listenMockTransfers } = await import('../../mock/transfer');
   return listenMockTransfers(cb);
 }
 

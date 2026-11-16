@@ -1,6 +1,7 @@
 // The dashboard document: what is stored by api.dashboardsSave and what the renderer and editor work on.
 // Documents are treated as immutable by the editor (see ops.ts), so snapshots can be shared freely by the undo history.
 import { clamp, clampRect, gridOf, type Bounds, type Orientation, type Rect } from './grid';
+import type { PublishTarget } from '../lib/types';
 import { newId } from './ids';
 import { registry, isWidgetType } from './widgets';
 import type { AnyWidgetDef } from './widgets/types';
@@ -40,7 +41,16 @@ export type Widget<T extends WidgetType = WidgetType> = {
 // ---------- document ----------
 export type Page = { id: string; name: string; widgets: Widget[] };
 export type Schedule = { enabled: boolean; everyMinutes: number };
-export type PublishOptions = { folder?: string; display?: boolean };
+export type PublishOptions = {
+  /** folder on the Digital Paper (the app setting when absent) */
+  folder?: string;
+  /** open on the Digital Paper after uploading (the app setting when absent) */
+  display?: boolean;
+  /** where to publish; always set after loading, 'dpt' (the Digital Paper) for documents made before USB readers existed */
+  target?: PublishTarget;
+  /** the reader's name when the target was chosen, so a reader that is unplugged now can still be named */
+  targetName?: string;
+};
 export type Dashboard = {
   version: 1;
   id: string;
@@ -136,11 +146,19 @@ export function migrateDashboard(raw: unknown, fallbackId = newId()): Dashboard 
     pages,
   };
   if (isRecord(src.schedule)) d.schedule = { enabled: src.schedule.enabled === true, everyMinutes: clamp(Math.round(num(src.schedule.everyMinutes, 30)), 1, 24 * 60) };
-  if (isRecord(src.publish)) {
-    const p: PublishOptions = {};
-    if (typeof src.publish.folder === 'string' && src.publish.folder.trim()) p.folder = src.publish.folder.trim();
-    if (typeof src.publish.display === 'boolean') p.display = src.publish.display;
-    d.publish = p;
-  }
+  const pub = isRecord(src.publish) ? src.publish : {};
+  const p: PublishOptions = { target: migrateTarget(pub.target) };
+  if (typeof pub.folder === 'string' && pub.folder.trim()) p.folder = pub.folder.trim();
+  if (typeof pub.display === 'boolean') p.display = pub.display;
+  if (typeof pub.targetName === 'string' && pub.targetName.trim()) p.targetName = pub.targetName.trim();
+  d.publish = p;
   return d;
+}
+
+/** a USB target keeps its reader, folder and format; anything else (including no target at all) is the Digital Paper */
+function migrateTarget(raw: unknown): PublishTarget {
+  if (isRecord(raw) && raw.kind === 'mtp' && typeof raw.readerId === 'string' && raw.readerId) {
+    return { kind: 'mtp', readerId: raw.readerId, folder: str(raw.folder, '').trim(), format: raw.format === 'png' ? 'png' : 'pdf' };
+  }
+  return { kind: 'dpt' };
 }

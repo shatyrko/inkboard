@@ -36,3 +36,10 @@ export async function pickPdfFiles(title: string, multiple = true): Promise<stri
   const demo = ['/demo/Reading list.pdf', '/demo/Sketchbook scans.pdf'];
   return multiple ? demo : demo.slice(0, 1);
 }
+
+/** Native picker for files of any type (USB readers take everything); two invented files stand in inside a plain browser. */
+export async function pickAnyFiles(title: string): Promise<string[] | null> {
+  const picked = await pickFiles({ title, multiple: true });
+  if (picked || inTauri) return picked;
+  return ['/demo/Reading list.epub', '/demo/Sketchbook scans.pdf'];
+}

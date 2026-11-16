@@ -7,6 +7,7 @@ import { ensureFonts, fontSample } from './fonts';
 import { pageSize } from './grid';
 import { pageLinks } from './links';
 import type { Dashboard } from './model';
+import { targetOf } from './publish-target';
 import { renderPage, sourceOf } from './render';
 
 /** how long one source may take before its widget gives up (the Rust side has its own, shorter limits) */
@@ -99,6 +100,9 @@ export function safeDocName(name: string): string {
 }
 
 export function buildMeta(d: Dashboard, pages: PublishPage[], settings: Pick<AppSettings, 'displayAfterPush'>): PublishMeta {
+  const target = targetOf(d);
+  // a USB reader has no "open on screen" and takes its folder from the target; the Digital Paper's meta stays as it always was
+  if (target.kind === 'mtp') return { name: safeDocName(d.name), folder: '', display: false, pages, target };
   return {
     name: safeDocName(d.name),
     folder: d.publish?.folder?.trim() ?? '',

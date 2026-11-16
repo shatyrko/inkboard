@@ -11,6 +11,7 @@ import {
   Tablet, Terminal, TextSelect, Timer, Trash2, TriangleAlert, Type, Undo2, Unplug, Upload, Wand2, Wifi, WifiOff, X, ZoomIn,
   ArrowLeft, ArrowRight,
   BringToFront, Grid3x3, Maximize, PanelLeft, SendToBack, ZoomOut,
+  ChevronsUpDown, FolderUp, Usb,
 } from 'lucide-vue-next';
 
 const map: Record<string, any> = {
@@ -27,6 +28,7 @@ const map: Record<string, any> = {
   warn: TriangleAlert, type: Type, undo: Undo2, unplug: Unplug, upload: Upload, wand: Wand2, wifi: Wifi, 'wifi-off': WifiOff, x: X, zoom: ZoomIn,
   'arrow-left': ArrowLeft, 'arrow-right': ArrowRight,
   'bring-front': BringToFront, grid: Grid3x3, fit: Maximize, 'panel-left': PanelLeft, 'send-back': SendToBack, 'zoom-out': ZoomOut,
+  'chevrons-updown': ChevronsUpDown, 'folder-up': FolderUp, usb: Usb,
 };
 
 const props = withDefaults(defineProps<{ name: string; size?: number; fill?: boolean }>(), { size: 18, fill: false });

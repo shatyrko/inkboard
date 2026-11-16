@@ -60,6 +60,17 @@ describe('PushScheduler', () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it('asks per job: one that may not run is skipped while the others go ahead', async () => {
+    let now = 1_000_000;
+    const run = vi.fn(async (_id: string) => {});
+    const s = new PushScheduler(run, { now: () => now, canRun: (id) => id !== 'usb' });
+    s.sync([{ id: 'wifi', everyMinutes: 5 }, { id: 'usb', everyMinutes: 5 }]);
+    now += 6 * MIN;
+    await s.tick();
+    expect(run.mock.calls.map((c) => c[0])).toEqual(['wifi']);
+    expect(s.state('usb')!.lastAt).toBeNull();
+  });
+
   it('does not start a job that is still running', async () => {
     const { s, run, advance } = setup();
     let release = () => {};

@@ -15,9 +15,11 @@ describe('migrateDashboard', () => {
     }
   });
 
-  it('keeps a sound document as it is', () => {
+  it('keeps a sound document as it is, adding only the default target', () => {
     const d = SAMPLES.find((s) => s.id === 'daily')!.make('Daily');
-    expect(migrateDashboard(JSON.parse(JSON.stringify(d)))).toEqual(d);
+    const loaded = migrateDashboard(JSON.parse(JSON.stringify(d)));
+    expect(loaded).toEqual({ ...d, publish: { target: { kind: 'dpt' } } });
+    expect(migrateDashboard(JSON.parse(JSON.stringify(loaded)))).toEqual(loaded);
   });
 
   it('drops unknown widget types and widgets that are not objects', () => {
@@ -71,10 +73,27 @@ describe('migrateDashboard', () => {
   it('normalises schedule and publish options', () => {
     const d = migrateDashboard({ schedule: { enabled: true, everyMinutes: 0 }, publish: { folder: '  Document/Mine ', display: false } });
     expect(d.schedule).toEqual({ enabled: true, everyMinutes: 1 });
-    expect(d.publish).toEqual({ folder: 'Document/Mine', display: false });
+    expect(d.publish).toEqual({ folder: 'Document/Mine', display: false, target: { kind: 'dpt' } });
     const e = migrateDashboard({ schedule: { enabled: 'yes' }, publish: { folder: ' ', display: 3 } });
     expect(e.schedule).toEqual({ enabled: false, everyMinutes: 30 });
-    expect(e.publish).toEqual({});
+    expect(e.publish).toEqual({ target: { kind: 'dpt' } });
+  });
+
+  it('sends documents from before USB readers to the Digital Paper', () => {
+    expect(migrateDashboard({ id: 'a', name: 'A', pages: [] }).publish).toEqual({ target: { kind: 'dpt' } });
+    expect(migrateDashboard({ publish: { folder: 'Document/Old' } }).publish).toEqual({ folder: 'Document/Old', target: { kind: 'dpt' } });
+  });
+
+  it('keeps a USB target with its reader, folder and format and the remembered name', () => {
+    const d = migrateDashboard({ publish: { target: { kind: 'mtp', readerId: 'mtp:ab12', folder: ' Documents/Wall ', format: 'png' }, targetName: ' Tab X C ' } });
+    expect(d.publish).toEqual({ target: { kind: 'mtp', readerId: 'mtp:ab12', folder: 'Documents/Wall', format: 'png' }, targetName: 'Tab X C' });
+  });
+
+  it('repairs a broken USB target: unknown formats become PDF, targets without a reader become the Digital Paper', () => {
+    expect(migrateDashboard({ publish: { target: { kind: 'mtp', readerId: 'mtp:x', format: 'gif', folder: 7 } } }).publish?.target).toEqual({ kind: 'mtp', readerId: 'mtp:x', folder: '', format: 'pdf' });
+    for (const target of [{ kind: 'mtp' }, { kind: 'mtp', readerId: '' }, { kind: 'floppy' }, 'mtp', null, 5]) {
+      expect(migrateDashboard({ publish: { target } }).publish?.target).toEqual({ kind: 'dpt' });
+    }
   });
 
   it('replaces a broken timestamp', () => {

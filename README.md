@@ -1,17 +1,31 @@
 # Inkboard
 
-A desktop app for the **Sony DPT-RP1** (and, in principle, the DPT-CP1) Digital Paper reader. It manages the reader's library
-and settings over your Wi-Fi, and it turns the reader into a **dashboard screen**: you compose pages out of widgets, Inkboard
-renders them, uploads them as a PDF and opens them on the e-ink display.
+A desktop app for e-ink readers: the **Sony DPT-RP1** (and, in principle, the DPT-CP1) Digital Paper over Wi-Fi, and
+**Android e-readers such as ONYX Boox** over USB. It manages their files, and it turns a reader into a **dashboard screen**:
+you compose pages out of widgets, Inkboard renders them and puts them on the reader as a PDF (or as PNG pages).
 
 The DPT-RP1 is no longer sold or updated. It is still a very good 13.3" e-ink screen, and Inkboard exists so that it keeps
 being useful instead of ending up in a drawer.
 
 Built with Tauri 2, Rust and Vue 3. Linux is the platform it is developed on; the pieces are portable but untested elsewhere.
 
+## Readers
+
+| | Sony Digital Paper (Wi-Fi) | Android e-reader, e.g. Boox (USB, MTP) |
+|---|---|---|
+| Library / files | its own library of PDFs | a file manager for the whole storage |
+| Upload, download, rename, move, delete | yes | yes (folders are deleted with their contents) |
+| Settings on the reader (clock, time zone, standby, Wi-Fi) | yes | no, change them on the reader |
+| Live mirror of the screen | yes | no |
+| Open a document on the reader's screen | yes | no, open it from the reader's own file app |
+| Dashboards | PDF, opened right after publishing | PDF or PNG pages saved to a folder |
+
+Switch between readers with the selector at the top of the sidebar. A USB reader shows up there by itself when it is plugged
+in and set to file transfer (MTP). On Linux, the `libmtp` package ships the udev rules that let a normal user talk to it.
+
 ## What it does
 
-**Reader**
+**Digital Paper**
 - Finds the reader on your network (mDNS) or takes an address, and pairs with it using the PIN the reader shows.
 - Battery, pen battery, storage, firmware and API version, and a live mirror of what the reader is showing.
 - Settings: date and time format, time zone, auto-standby, owner name, set the clock from the computer, Wi-Fi networks
@@ -35,8 +49,8 @@ Not included, on purpose: **firmware updates**. The reader is out of support and
 ## Things worth knowing
 
 - **PDF only.** The reader opens PDF files and nothing else. Convert EPUB, FB2 or MOBI first (for example with Calibre).
-- **Same network.** The computer and the reader must be on the same Wi-Fi network, and the reader's Wi-Fi must be on. Over
-  USB the reader exposes no files, so the network API is the only way in.
+- **Same network.** The computer and the Digital Paper must be on the same Wi-Fi network, and its Wi-Fi must be on. Over
+  USB the Digital Paper exposes no files, so the network API is the only way in. (Android readers are the other way round: USB only.)
 - **The reader draws a dashed outline around PDF links.** Give link widgets a visible border and the outline just looks like a button.
 - **Pairing keys** live in your config folder (`~/.config/inkboard`, owner-only permissions). Keys made by
   [dpt-rp1-py](https://github.com/janten/dpt-rp1-py) in `~/.config/dpt` can be imported instead of pairing again.
@@ -66,7 +80,7 @@ pnpm test                # drawing, grid, undo and the other pure logic of the U
 ### Developing the UI without a reader
 
 `pnpm dev` serves the page in an ordinary browser, where a built-in mock backend answers every command with invented data.
-Useful URL switches: `?mock=paired` (start already connected), `?mock=big` (a 2000-entry library), `?mock=offline`,
+Useful URL switches: `?mock=paired` (both readers), `?mock=mtp` (only a USB reader), `?mock=dpt` (only the Digital Paper), `?mock=unplugged`, `?mock=big` (a 2000-entry library), `?mock=offline`,
 `?mock=legacy` (offer to import old keys), `?theme=dark|light`, `?view=device|library|dashboards|settings` (open on a section), `?chrome` (draw the window buttons).
 
 ### Talking to a reader from the command line
@@ -80,8 +94,8 @@ cargo run -p dpt-client --example probe -- <address>     # read-only smoke test 
 
 | Path | What |
 |---|---|
-| `crates/dpt-client` | The reader's protocol: pairing, login, library, settings, Wi-Fi, uploads. See [docs/PROTOCOL.md](docs/PROTOCOL.md). |
-| `src-tauri` | The commands the window calls, dashboard storage, system stats, the PDF writer. |
+| `crates/dpt-client` | The Digital Paper's protocol: pairing, login, library, settings, Wi-Fi, uploads. See [docs/PROTOCOL.md](docs/PROTOCOL.md). |
+| `src-tauri` | The commands the window calls, USB readers over MTP (via [mtp-rs](https://crates.io/crates/mtp-rs)), dashboard storage, system stats, the PDF and PNG writers. |
 | `src` | The Vue app: views, the dashboard editor and renderer (`src/dashboard`), a mock backend (`src/mock`). |
 
 ## Credits

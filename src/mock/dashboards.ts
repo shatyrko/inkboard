@@ -1,7 +1,9 @@
 // Mock handlers for dashboards, system stats, fetch/run and publishing. (Owned by the dashboard builder.)
 // Dashboards live in memory and in localStorage, so they survive a reload of the browser preview.
+import { defaultFolder } from '../dashboard/publish-target';
 import type { DashboardSummary, PublishMeta, PublishResult, SystemStats } from '../lib/types';
 import { handlers as device, showOnMockReader } from './device';
+import { addMockFile } from './mtp';
 
 type Doc = { id: string; name: string; updated?: string; [k: string]: unknown };
 
@@ -73,6 +75,25 @@ function grayPagePng(pixels: Uint8Array, width: number, height: number): string 
   return small.toDataURL('image/png');
 }
 
+/** a push to a USB reader writes files into its folder, which then show up in the mock reader's file manager */
+function saveToUsb(meta: PublishMeta, pixels: Uint8Array): PublishResult {
+  const target = meta.target;
+  if (target?.kind !== 'mtp') throw 'not a USB target';
+  const folder = target.folder || defaultFolder(target.format);
+  const pages = meta.pages.length;
+  if (target.format === 'pdf') {
+    const name = `${meta.name}.pdf`;
+    const bytes = Math.max(20_000, Math.round(pixels.length / 40));
+    addMockFile(target.readerId, folder, name, bytes);
+    return { path: `${folder}/${name}`, entryId: '', pages, bytes };
+  }
+  // one PNG per page: "Name.png" for a single page, "Name - 1.png", "Name - 2.png" ... for several
+  const each = Math.max(20_000, Math.round(pixels.length / Math.max(1, pages) / 12));
+  const names = pages === 1 ? [`${meta.name}.png`] : meta.pages.map((_, i) => `${meta.name} - ${i + 1}.png`);
+  for (const name of names) addMockFile(target.readerId, folder, name, each);
+  return { path: pages === 1 ? `${folder}/${names[0]}` : folder, entryId: '', pages, bytes: each * pages };
+}
+
 export const handlers: Record<string, (a: any) => unknown> = {
   dashboards_list: (): DashboardSummary[] =>
     [...docs.values()].map((d) => ({ id: d.id, name: d.name, updated: d.updated ?? new Date().toISOString() })),
@@ -108,6 +129,7 @@ export const handlers: Record<string, (a: any) => unknown> = {
   read_image: () => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sampleSvg)}`,
 
   dashboard_publish: ({ meta, pixels }: { meta: PublishMeta; pixels: Uint8Array }): PublishResult => {
+    if (meta.target?.kind === 'mtp') return saveToUsb(meta, pixels);
     const first = meta.pages[0];
     if (meta.display && first) showOnMockReader(grayPagePng(pixels, first.width, first.height));
     return {

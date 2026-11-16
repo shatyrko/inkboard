@@ -9,6 +9,8 @@ import { fitScale } from './grid';
 import { dataUrlToBlob } from './reader-preview';
 
 const props = defineProps<{
+  /** false when the target reader cannot be mirrored: the panel then only explains why */
+  available: boolean;
   image: string | null;
   updatedAt: number | null;
   loading: boolean;
@@ -76,18 +78,25 @@ const menu = (): MenuItem[] => [
       <h2>Reader screen</h2>
       <span v-if="loading" class="spinner busy" role="status" aria-label="Refreshing"></span>
       <span class="grow"></span>
-      <button class="btn ghost icon small" title="Refresh (Shift+R)" aria-label="Refresh the reader screen" :disabled="!connected" @click="emit('refresh')"><Icon name="refresh" :size="16" /></button>
+      <button class="btn ghost icon small" title="Refresh (Shift+R)" aria-label="Refresh the reader screen" :disabled="!connected || !available" @click="emit('refresh')"><Icon name="refresh" :size="16" /></button>
       <button class="btn ghost icon small" title="Hide the reader panel (R)" aria-label="Hide the reader panel" @click="emit('close')"><Icon name="x" :size="16" /></button>
     </header>
 
-    <div ref="stage" v-context="menu" class="stage">
+    <div v-if="!available" class="stage">
+      <div class="unavailable">
+        <Icon name="info" :size="22" />
+        <p>Screen mirroring is only available for the Digital Paper. Open the saved file on the reader to see it.</p>
+      </div>
+    </div>
+
+    <div v-show="available" ref="stage" v-context="menu" class="stage">
       <div class="sheet" :class="{ dim, empty: !image }" :style="sheet">
         <img v-if="image" :src="image" alt="What the reader is showing right now" draggable="false" @load="onLoad" />
         <div v-else class="hold"><Icon name="device" :size="26" /><span>No picture yet</span></div>
       </div>
     </div>
 
-    <footer class="note" role="status">
+    <footer v-show="available" class="note" role="status">
       <template v-if="!connected">
         <Icon name="unplug" :size="16" />
         <div class="msg"><b>Reader not connected</b><span :title="reason">{{ reason || 'Connect the reader to see its screen.' }}</span></div>
@@ -128,4 +137,6 @@ h2 { font-size: 13px; color: var(--text); }
 .note .msg b { font-weight: 550; color: var(--text); }
 .note .msg span { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .bad { color: var(--danger); flex: none; }
+.unavailable { display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 220px; padding: 20px; text-align: center; color: var(--muted); }
+.unavailable p { margin: 0; }
 </style>

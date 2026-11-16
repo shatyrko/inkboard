@@ -3,24 +3,27 @@
 //
 // URL switches (read once at load):
 //   (none)          nothing is paired: the connect flow shows. PIN 12345678 pairs successfully, any other PIN fails
-//   ?mock=paired    already paired and connected
-//   ?mock=offline   paired, but the reader never answers (for the reconnect state)
+//   ?mock=paired    the Digital Paper (paired, connected) and the USB reader (plugged in)
+//   ?mock=dpt       only the Digital Paper
+//   ?mock=mtp       only the USB reader; the Digital Paper is not paired
+//   ?mock=unplugged both known, the USB reader not connected (mock/mtp.ts can plug it back in)
+//   ?mock=offline   Digital Paper paired, but it never answers (for the reconnect state)
 //   ?mock=legacy    nothing paired, but keys from dpt-rp1-py are "found"
-//   ?mock=big       paired, with about two thousand extra documents
+//   ?mock=big       Digital Paper only, with about two thousand extra documents
 import type {
-  AppSettings, ConfigKey, ConnectionState, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, ProbeResult, TemplateEntry, TransferProgress,
+  AppSettings, ConfigKey, ConnectionState, DeviceConfig, DeviceStatus, DiscoveredDevice, Entry, ProbeResult, Reader, TemplateEntry,
   UploadResult, WifiConnectRequest, WifiNetwork, WifiScanResult,
 } from '../lib/types';
 import { ROOT_ID, bigLibrary, documentEntry, folderEntry, newId, seedLibrary } from './device-data';
 import { mockScreenshot } from './device-screen';
-
-const mode = new URLSearchParams(location.search).get('mock') ?? '';
+import { mode } from './mode';
+import { usbReader } from './mtp';
+import { simulateTransfer, sleep } from './transfer';
 
 // what the fake reader shows once a dashboard was pushed to it with "open on the reader" (set by mock/dashboards.ts);
 // until then it shows the book page
 let pushed: string | null = null;
 export function showOnMockReader(png: string) { pushed = png; }
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // 192.0.2.0/24 is reserved for documentation: these addresses never belong to a real network
 const READERS: DiscoveredDevice[] = [
@@ -37,7 +40,7 @@ const paired = (addr: string, connected: boolean): ConnectionState => ({
 });
 
 let conn: ConnectionState = forgotten();
-if (mode === 'paired' || mode === 'big') conn = paired(READERS[0].addr, true);
+if (['paired', 'dpt', 'big', 'unplugged'].includes(mode)) conn = paired(READERS[0].addr, true);
 if (mode === 'offline') conn = paired(READERS[0].addr, false);
 let pinRequestedFor: string | null = null;
 
@@ -106,21 +109,6 @@ function ensureFolder(path: string): string {
   return f.id;
 }
 
-// transfer progress goes to subscribers like the Tauri event does; the browser has no events, so the Library listens here
-const listeners = new Set<(p: TransferProgress) => void>();
-export function listenMockTransfers(cb: (p: TransferProgress) => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
-}
-async function transfer(name: string, direction: 'up' | 'down', total: number) {
-  const id = newId();
-  const steps = 6;
-  for (let i = 1; i <= steps; i++) {
-    await sleep(150);
-    const p: TransferProgress = { id, name, direction, sent: Math.round((total * i) / steps), total, done: i === steps, error: null };
-    listeners.forEach((l) => l(p));
-  }
-}
 const fakeSize = (name: string) => 300_000 + [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 9000, 7) * 1000;
 
 function mustBeFreeIn(folderPath: string, name: string, ignoreId?: string) {
@@ -128,7 +116,16 @@ function mustBeFreeIn(folderPath: string, name: string, ignoreId?: string) {
   if (clash) throw `"${name}" already exists in ${folderPath}.`;
 }
 
+/** the paired Digital Paper, as the readers list names it */
+const dptReader = (): Reader => ({ id: 'dpt', kind: 'digital-paper', name: 'DPT-RP1', maker: 'Sony', connected: conn.connected, link: 'wifi' });
+
 export const handlers: Record<string, (a: any) => unknown> = {
+  // ----- readers -----
+  readers_list: () => {
+    const usb = usbReader();
+    return [...(conn.configured ? [dptReader()] : []), ...(usb ? [usb] : [])];
+  },
+
   // ----- connection -----
   connection_state: () => ({ ...conn }),
   discover_devices: async () => {
@@ -208,7 +205,7 @@ export const handlers: Record<string, (a: any) => unknown> = {
       const name = base(p);
       if (!/\.pdf$/i.test(name)) { out.push({ name, ok: false, error: 'Only PDF files can be uploaded.' }); continue; }
       const size = fakeSize(name);
-      await transfer(name, 'up', size);
+      await simulateTransfer(name, 'up', size);
       const path = `${folder}/${name}`;
       // an upload under an existing name replaces it
       entries = entries.filter((e) => e.path !== path);
@@ -220,7 +217,7 @@ export const handlers: Record<string, (a: any) => unknown> = {
   library_download: async ({ entryId }: { entryId: string }) => {
     requireReader();
     const e = find(entryId);
-    await transfer(e.name, 'down', e.size);
+    await simulateTransfer(e.name, 'down', e.size);
   },
   library_delete: ({ entryId, kind }: { entryId: string; kind: 'document' | 'folder' }) => {
     requireReader();

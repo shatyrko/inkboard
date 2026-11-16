@@ -1,9 +1,12 @@
 // Glue between the editor and the Reader panel: whether it is on (remembered), where it sits for the current window width,
 // and when the live preview may poll (reader-preview.ts holds the policy itself).
 import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch, type Ref } from 'vue';
+import { capabilities } from '../lib/readers';
 import { app } from '../lib/store';
+import type { PublishTarget } from '../lib/types';
 import { notify } from '../lib/ui';
 import { background } from './background';
+import { isTargetReachable, kindOfTarget } from './publish-target';
 import { captureReaderScreen, createReaderPreview } from './reader-preview';
 
 const KEY = 'inkboard.dashboard.reader';
@@ -14,7 +17,7 @@ function remembered(): boolean {
   try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
 }
 
-export function useReaderPanel({ hasDoc, selectedId }: { hasDoc: Ref<boolean>; selectedId: Ref<string | null> }) {
+export function useReaderPanel({ hasDoc, selectedId, target }: { hasDoc: Ref<boolean>; selectedId: Ref<string | null>; target: Ref<PublishTarget> }) {
   const on = ref(remembered());
   /** in the narrow layout: which of the two shares the right-hand column (a remembered "on" opens it on the reader) */
   const side = ref<'props' | 'reader'>(on.value ? 'reader' : 'props');
@@ -29,11 +32,14 @@ export function useReaderPanel({ hasDoc, selectedId }: { hasDoc: Ref<boolean>; s
     onFailureStreak: (message) => notify(`Could not read the reader's screen: ${message}`, 'error'),
   });
 
+  /** only the Digital Paper can be mirrored; for a USB reader the panel explains that and nothing is polled */
+  const available = computed(() => capabilities(kindOfTarget(target.value)).screenMirror);
+
   const viewActive = ref(false);
   const windowVisible = ref(document.visibilityState === 'visible');
-  const connected = computed(() => !!app.conn?.connected);
-  watch([shown, viewActive, windowVisible, connected], ([panelVisible, active, visible, online]) => {
-    preview.update({ panelVisible, viewActive: active, windowVisible: visible, connected: online });
+  const connected = computed(() => isTargetReachable({ kind: 'dpt' }, app.readers, !!app.conn?.connected));
+  watch([shown, available, viewActive, windowVisible, connected], ([panelShown, canMirror, active, visible, online]) => {
+    preview.update({ panelVisible: panelShown && canMirror, viewActive: active, windowVisible: visible, connected: online });
   }, { immediate: true });
 
   // a push of any dashboard may have changed what the reader shows
@@ -51,10 +57,11 @@ export function useReaderPanel({ hasDoc, selectedId }: { hasDoc: Ref<boolean>; s
   function refresh() {
     const wasShown = shown.value;
     set(true);
-    if (wasShown) preview.refresh();
+    if (wasShown && available.value) preview.refresh();
   }
 
   const bind = computed(() => ({
+    available: available.value,
     image: preview.image.value,
     updatedAt: preview.updatedAt.value,
     loading: preview.loading.value,

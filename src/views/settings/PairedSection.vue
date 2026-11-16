@@ -10,7 +10,7 @@ const copyMenu = (what: string, value: string) => (): MenuItem[] => [{ label: `C
 </script>
 
 <template>
-  <div class="section-label">Paired reader</div>
+  <div class="section-label">Paired Digital Paper</div>
   <div class="card">
     <div class="setting">
       <div class="t"><b>Status</b></div>

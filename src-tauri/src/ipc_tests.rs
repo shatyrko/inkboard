@@ -204,9 +204,10 @@ fn usb_reader_file_manager_round_trip() {
 
     let local = dir.join("Sample Book.pdf");
     std::fs::write(&local, vec![7u8; 300_000]).unwrap();
-    let res = call(&w, "mtp_upload", json!({ "id": id, "storage": storage, "parent": books, "paths": [local.to_str().unwrap(), "/definitely/missing.pdf"] })).unwrap();
+    let res = call(&w, "mtp_upload", json!({ "id": id, "storage": storage, "parent": books, "paths": [local.to_str().unwrap(), "/definitely/missing.pdf", dir.to_str().unwrap()] })).unwrap();
     assert_eq!(res[0]["ok"], true);
     assert_eq!(res[1]["ok"], false);
+    assert_eq!(res[2]["ok"], false, "a folder is not an uploadable file");
 
     let listing = call(&w, "mtp_list", json!({ "id": id, "storage": storage, "parent": books })).unwrap();
     assert_eq!(names(&listing), ["Sample Book.pdf"]);
