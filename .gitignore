@@ -1,0 +1,13 @@
+/node_modules
+/dist
+/target
+/src-tauri/target
+/src-tauri/gen
+*.log
+.DS_Store
+.env
+.env.*
+# per-user device data never belongs in the repo
+/*.pem
+/deviceid.dat
+/privatekey.dat
