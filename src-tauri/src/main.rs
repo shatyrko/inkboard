@@ -5,6 +5,8 @@
 
 mod conn;
 mod dashboards;
+#[cfg(test)]
+mod ipc_tests;
 mod library;
 mod pdf;
 mod settings;
